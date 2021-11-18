@@ -1,6 +1,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2021-11-18T20:56:10Z by kres latest.
+# Generated on 2021-11-19T13:50:19Z by kres c4d092b.
 
 # common variables
 
@@ -77,7 +77,7 @@ respectively.
 
 endef
 
-all: unit-tests event-sink image-event-sink lint
+all: unit-tests siderolink-agent lint
 
 .PHONY: clean
 clean:  ## Cleans up all artifacts.
@@ -121,15 +121,15 @@ unit-tests-race:  ## Performs unit tests with race detection enabled.
 coverage:  ## Upload coverage data to codecov.io.
 	bash -c "bash <(curl -s https://codecov.io/bash) -f $(ARTIFACTS)/coverage.txt -X fix"
 
-.PHONY: $(ARTIFACTS)/event-sink-linux-amd64
-$(ARTIFACTS)/event-sink-linux-amd64:
-	@$(MAKE) local-event-sink-linux-amd64 DEST=$(ARTIFACTS)
+.PHONY: $(ARTIFACTS)/siderolink-agent-linux-amd64
+$(ARTIFACTS)/siderolink-agent-linux-amd64:
+	@$(MAKE) local-siderolink-agent-linux-amd64 DEST=$(ARTIFACTS)
 
-.PHONY: event-sink-linux-amd64
-event-sink-linux-amd64: $(ARTIFACTS)/event-sink-linux-amd64  ## Builds executable for event-sink-linux-amd64.
+.PHONY: siderolink-agent-linux-amd64
+siderolink-agent-linux-amd64: $(ARTIFACTS)/siderolink-agent-linux-amd64  ## Builds executable for siderolink-agent-linux-amd64.
 
-.PHONY: event-sink
-event-sink: event-sink-linux-amd64  ## Builds executables for event-sink.
+.PHONY: siderolink-agent
+siderolink-agent: siderolink-agent-linux-amd64  ## Builds executables for siderolink-agent.
 
 .PHONY: lint-markdown
 lint-markdown:  ## Runs markdownlint.
@@ -137,10 +137,6 @@ lint-markdown:  ## Runs markdownlint.
 
 .PHONY: lint
 lint: lint-golangci-lint lint-gofumpt lint-markdown  ## Run all linters for the project.
-
-.PHONY: image-event-sink
-image-event-sink:  ## Builds image for event-sink.
-	@$(MAKE) target-$@ TARGET_ARGS="--tag=$(REGISTRY)/$(USERNAME)/event-sink:$(TAG)"
 
 .PHONY: rekres
 rekres:

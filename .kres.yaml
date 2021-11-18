@@ -5,8 +5,10 @@ spec:
   specs:
     - source: api/events/events.proto
       subdirectory: events/
+    - source: api/siderolink/provision.proto
+      subdirectory: siderolink/
 ---
 kind: auto.CommandConfig
-name: events-sink
+name: siderolink-agent
 spec:
   disableImage: true

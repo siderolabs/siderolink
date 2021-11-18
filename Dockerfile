@@ -2,13 +2,9 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2021-11-18T20:56:10Z by kres latest.
+# Generated on 2021-11-19T13:50:19Z by kres c4d092b.
 
 ARG TOOLCHAIN
-
-FROM ghcr.io/talos-systems/ca-certificates:v0.3.0-12-g90722c3 AS image-ca-certificates
-
-FROM ghcr.io/talos-systems/fhs:v0.3.0-12-g90722c3 AS image-fhs
 
 # runs markdownlint
 FROM node:14.8.0-alpine AS lint-markdown
@@ -22,6 +18,7 @@ RUN markdownlint --ignore "CHANGELOG.md" --ignore "**/node_modules/**" --ignore 
 # collects proto specs
 FROM scratch AS proto-specs
 ADD api/events/events.proto /api/events/
+ADD api/siderolink/provision.proto /api/siderolink/
 
 # base toolchain image
 FROM ${TOOLCHAIN} AS toolchain
@@ -58,6 +55,7 @@ RUN --mount=type=cache,target=/go/pkg go mod download
 RUN --mount=type=cache,target=/go/pkg go mod verify
 COPY ./api ./api
 COPY ./cmd ./cmd
+COPY ./internal ./internal
 COPY ./pkg ./pkg
 RUN --mount=type=cache,target=/go/pkg go list -mod=readonly all >/dev/null
 
@@ -65,7 +63,9 @@ RUN --mount=type=cache,target=/go/pkg go list -mod=readonly all >/dev/null
 FROM tools AS proto-compile
 COPY --from=proto-specs / /
 RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/events/events.proto
+RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/siderolink/provision.proto
 RUN rm /api/events/events.proto
+RUN rm /api/siderolink/provision.proto
 
 # runs gofumpt
 FROM base AS lint-gofumpt
@@ -96,22 +96,14 @@ COPY --from=proto-compile /api/ /api/
 FROM scratch AS unit-tests
 COPY --from=unit-tests-run /src/coverage.txt /coverage.txt
 
-# builds event-sink-linux-amd64
-FROM base AS event-sink-linux-amd64-build
+# builds siderolink-agent-linux-amd64
+FROM base AS siderolink-agent-linux-amd64-build
 COPY --from=generate / /
-WORKDIR /src/cmd/event-sink
-RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg go build -ldflags "-s -w" -o /event-sink-linux-amd64
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg go build -ldflags "-s -w" -o /siderolink-agent-linux-amd64
 
-FROM scratch AS event-sink-linux-amd64
-COPY --from=event-sink-linux-amd64-build /event-sink-linux-amd64 /event-sink-linux-amd64
+FROM scratch AS siderolink-agent-linux-amd64
+COPY --from=siderolink-agent-linux-amd64-build /siderolink-agent-linux-amd64 /siderolink-agent-linux-amd64
 
-FROM event-sink-linux-${TARGETARCH} AS event-sink
-
-FROM scratch AS image-event-sink
-ARG TARGETARCH
-COPY --from=event-sink event-sink-linux-${TARGETARCH} /event-sink
-COPY --from=image-fhs / /
-COPY --from=image-ca-certificates / /
-LABEL org.opencontainers.image.source https://github.com/talos-systems/siderolink
-ENTRYPOINT ["/event-sink"]
+FROM siderolink-agent-linux-${TARGETARCH} AS siderolink-agent
 
