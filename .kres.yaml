@@ -1,0 +1,12 @@
+---
+kind: golang.Protobuf
+spec:
+  vtProtobufEnabled: true
+  specs:
+    - source: api/events/events.proto
+      subdirectory: events/
+---
+kind: auto.CommandConfig
+name: events-sink
+spec:
+  disableImage: true
