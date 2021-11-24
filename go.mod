@@ -6,6 +6,7 @@ require (
 	github.com/jsimonetti/rtnetlink v0.0.0-20211022192332-93da33804786
 	github.com/stretchr/testify v1.7.0
 	github.com/talos-systems/talos/pkg/machinery v0.14.0-alpha.1.0.20211118180932-1ffa8e048008
+	go.uber.org/zap v1.18.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.zx2c4.com/wireguard v0.0.0-20211109020618-685490f568cf
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20211109202428-0073765f69ba
@@ -31,6 +32,8 @@ require (
 	github.com/mdlayher/socket v0.0.0-20211102153432-57e3fa563ecb // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.7.0 // indirect
 	go4.org/intern v0.0.0-20211027215823-ae77deb06f29 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20211027215541-db492cf91b37 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
@@ -31,9 +32,14 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		return fmt.Errorf("error creating logger")
+	}
+
 	eg, ctx := errgroup.WithContext(ctx)
 
-	if err := sideroLink(ctx, eg); err != nil {
+	if err := sideroLink(ctx, eg, logger); err != nil {
 		return fmt.Errorf("SideroLink: %w", err)
 	}
 

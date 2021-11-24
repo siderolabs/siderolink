@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
@@ -24,7 +25,7 @@ var sideroLinkFlags struct {
 	apiEndpoint       string
 }
 
-func sideroLink(ctx context.Context, eg *errgroup.Group) error {
+func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
 	lis, err := net.Listen("tcp", sideroLinkFlags.apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC API: %w", err)
@@ -61,7 +62,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group) error {
 	pb.RegisterProvisionServiceServer(s, srv)
 
 	eg.Go(func() error {
-		return wgDevice.Run(ctx, srv)
+		return wgDevice.Run(ctx, logger, srv)
 	})
 
 	eg.Go(func() error {

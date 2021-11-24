@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"github.com/jsimonetti/rtnetlink/rtnl"
+	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/ipc"
@@ -56,7 +57,7 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 }
 
 // Run the device.
-func (dev *Device) Run(ctx context.Context, peers PeerSource) error {
+func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) error {
 	client, err := wgctrl.New()
 	if err != nil {
 		return fmt.Errorf("error initializing Wireguard client: %w", err)
@@ -71,10 +72,10 @@ func (dev *Device) Run(ctx context.Context, peers PeerSource) error {
 
 	defer rtnlClient.Close() //nolint:errcheck
 
-	logger := device.NewLogger(
-		device.LogLevelVerbose,
-		fmt.Sprintf("(%s) ", interfaceName),
-	)
+	wgLogger := &device.Logger{
+		Verbosef: logger.Sugar().Debugf,
+		Errorf:   logger.Sugar().Errorf,
+	}
 
 	uapi, err := ipc.UAPIListen(interfaceName, dev.fileUAPI)
 	if err != nil {
@@ -83,7 +84,7 @@ func (dev *Device) Run(ctx context.Context, peers PeerSource) error {
 
 	defer uapi.Close() //nolint:errcheck
 
-	device := device.NewDevice(dev.tun, conn.NewDefaultBind(), logger)
+	device := device.NewDevice(dev.tun, conn.NewDefaultBind(), wgLogger)
 
 	defer device.Close()
 
@@ -124,6 +125,8 @@ func (dev *Device) Run(ctx context.Context, peers PeerSource) error {
 		return fmt.Errorf("error bringing link up: %w", err)
 	}
 
+	logger.Info("wireguard device set up", zap.String("interface", interfaceName), zap.Stringer("address", dev.address))
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -133,24 +136,81 @@ func (dev *Device) Run(ctx context.Context, peers PeerSource) error {
 		case <-device.Wait():
 			return nil
 		case peerEvent := <-peers.EventCh():
-			cfg := wgtypes.Config{
-				Peers: []wgtypes.PeerConfig{
-					{
-						PublicKey:         peerEvent.PubKey,
-						Remove:            peerEvent.Remove,
-						ReplaceAllowedIPs: true,
-						AllowedIPs: []net.IPNet{
-							*netaddr.IPPrefixFrom(peerEvent.Address, peerEvent.Address.BitLen()).IPNet(),
-						},
-					},
-				},
-			}
-
-			if err = client.ConfigureDevice(interfaceName, cfg); err != nil {
-				return fmt.Errorf("error configuring Wireguard peers: %w", err)
+			if err := dev.handlePeerEvent(client, logger, peerEvent); err != nil {
+				return err
 			}
 		}
 	}
+}
+
+func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) (bool, error) {
+	oldCfg, err := client.Device(interfaceName)
+	if err != nil {
+		return false, fmt.Errorf("error retrieving Wireguard configuration: %w", err)
+	}
+
+	// check if this update can be skipped
+	pubKey := peerEvent.PubKey.String()
+
+	for _, oldPeer := range oldCfg.Peers {
+		if oldPeer.PublicKey.String() == pubKey {
+			if len(oldPeer.AllowedIPs) != 1 {
+				break
+			}
+
+			if prefix, ok := netaddr.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
+				if prefix.IP() == peerEvent.Address {
+					// skip the update
+					logger.Info("skipping peer update", zap.String("public_key", pubKey))
+
+					return true, nil
+				}
+			}
+
+			break
+		}
+	}
+
+	return false, nil
+}
+
+func (dev *Device) handlePeerEvent(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) error {
+	if !peerEvent.Remove {
+		skipEvent, err := dev.checkDuplicateUpdate(client, logger, peerEvent)
+		if err != nil {
+			return err
+		}
+
+		if skipEvent {
+			return nil
+		}
+	}
+
+	cfg := wgtypes.Config{
+		Peers: []wgtypes.PeerConfig{
+			{
+				PublicKey: peerEvent.PubKey,
+				Remove:    peerEvent.Remove,
+			},
+		},
+	}
+
+	if !peerEvent.Remove {
+		cfg.Peers[0].ReplaceAllowedIPs = true
+		cfg.Peers[0].AllowedIPs = []net.IPNet{
+			*netaddr.IPPrefixFrom(peerEvent.Address, peerEvent.Address.BitLen()).IPNet(),
+		}
+
+		logger.Info("updating peer", zap.Stringer("public_key", peerEvent.PubKey), zap.Stringer("address", peerEvent.Address))
+	} else {
+		logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
+	}
+
+	if err := client.ConfigureDevice(interfaceName, cfg); err != nil {
+		return fmt.Errorf("error configuring Wireguard peers: %w", err)
+	}
+
+	return nil
 }
 
 // Close the device.
