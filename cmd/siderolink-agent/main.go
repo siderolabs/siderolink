@@ -21,6 +21,7 @@ func main() {
 	flag.StringVar(&sideroLinkFlags.wireguardEndpoint, "sidero-link-wireguard-endpoint", "172.20.0.1:51821", "advertised Wireguard endpoint")
 	flag.StringVar(&sideroLinkFlags.apiEndpoint, "sidero-link-api-endpoint", ":4000", "gRPC API endpoint for the SideroLink")
 	flag.StringVar(&eventSinkFlags.apiEndpoint, "event-sink-endpoint", ":8080", "gRPC API endpoint for the Event Sink")
+	flag.StringVar(&logReceiverFlags.endpoint, "log-receiver-endpoint", ":4001", "TCP log receiver endpoint")
 	flag.Parse()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -44,7 +45,11 @@ func run(ctx context.Context) error {
 	}
 
 	if err := eventSink(ctx, eg); err != nil {
-		return fmt.Errorf("SideroLink: %w", err)
+		return fmt.Errorf("event sink: %w", err)
+	}
+
+	if err := logReceiver(ctx, eg, logger); err != nil {
+		return fmt.Errorf("log receiver: %w", err)
 	}
 
 	if err := eg.Wait(); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
