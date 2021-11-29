@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"net"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -25,7 +26,12 @@ func logHandler(logger *zap.Logger) logreceiver.Handler {
 }
 
 func logReceiver(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
-	srv, err := logreceiver.NewServer(logger, logReceiverFlags.endpoint, logHandler(logger))
+	lis, err := net.Listen("tcp", logReceiverFlags.endpoint)
+	if err != nil {
+		return err
+	}
+
+	srv, err := logreceiver.NewServer(logger, lis, logHandler(logger))
 	if err != nil {
 		return err
 	}

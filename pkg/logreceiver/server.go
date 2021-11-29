@@ -26,15 +26,10 @@ type Server struct {
 // Handler is called for each received message.
 type Handler func(srcAddress netaddr.IP, msg map[string]interface{})
 
-// NewServer initializes new Server and starts listening.
-func NewServer(logger *zap.Logger, listenAddress string, handler Handler) (*Server, error) {
-	lis, err := net.Listen("tcp", listenAddress)
-	if err != nil {
-		return nil, fmt.Errorf("error listening: %w", err)
-	}
-
+// NewServer initializes new Server.
+func NewServer(logger *zap.Logger, listener net.Listener, handler Handler) (*Server, error) {
 	return &Server{
-		listener: lis,
+		listener: listener,
 		logger:   logger,
 		handler:  handler,
 	}, nil
