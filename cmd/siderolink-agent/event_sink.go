@@ -25,13 +25,13 @@ var eventSinkFlags struct {
 type adapter struct{}
 
 // HandleEvent implements events.Adapter.
-func (s *adapter) HandleEvent(e events.Event) error {
+func (s *adapter) HandleEvent(ctx context.Context, e events.Event) error {
 	data, err := yaml.Marshal(e.Payload)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Event: %s, ID: %s, Payload: \n\t%s", e.TypeURL, e.ID, strings.Join(strings.Split(string(data), "\n"), "\n\t"))
+	log.Printf("Node: %s, Event: %s, ID: %s, Payload: \n\t%s", e.Node, e.TypeURL, e.ID, strings.Join(strings.Split(string(data), "\n"), "\n\t"))
 
 	return nil
 }

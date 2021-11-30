@@ -12,4 +12,5 @@ type Event struct {
 	Payload proto.Message
 	TypeURL string
 	ID      string
+	Node    string
 }

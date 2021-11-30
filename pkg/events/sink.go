@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/talos-systems/talos/pkg/machinery/api/machine"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/talos-systems/siderolink/api/events"
@@ -15,7 +16,7 @@ import (
 
 // Adapter is an abstract event stream receiver.
 type Adapter interface {
-	HandleEvent(event Event) error
+	HandleEvent(ctx context.Context, event Event) error
 }
 
 // Sink implements events.EventSinkServiceServer.
@@ -64,7 +65,15 @@ func (s *Sink) Publish(ctx context.Context, e *events.EventRequest) (*events.Eve
 		return res, err
 	}
 
-	return res, s.adapter.HandleEvent(Event{
+	var node string
+
+	peer, ok := peer.FromContext(ctx)
+	if ok {
+		node = peer.Addr.String()
+	}
+
+	return res, s.adapter.HandleEvent(ctx, Event{
+		Node:    node,
 		TypeURL: typeURL,
 		ID:      e.Id,
 		Payload: msg,

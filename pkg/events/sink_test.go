@@ -36,9 +36,13 @@ type state struct {
 }
 
 // HandleEvent implements events.Adapter.
-func (s *state) HandleEvent(e events.Event) error {
+func (s *state) HandleEvent(ctx context.Context, e events.Event) error {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
+
+	if e.Node == "" {
+		return fmt.Errorf("node address information is empty")
+	}
 
 	switch msg := e.Payload.(type) {
 	case *machine.AddressEvent:
