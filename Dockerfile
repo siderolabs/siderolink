@@ -2,7 +2,7 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2021-11-19T13:50:19Z by kres c4d092b.
+# Generated on 2022-05-20T18:03:15Z by kres 0bf4e28-dirty.
 
 ARG TOOLCHAIN
 
@@ -29,10 +29,13 @@ FROM toolchain AS tools
 ENV GO111MODULE on
 ENV CGO_ENABLED 0
 ENV GOPATH /go
-RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /bin v1.42.1
+RUN curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s -- -b /bin v1.45.2
 ARG GOFUMPT_VERSION
-RUN go install mvdan.cc/gofumpt/gofumports@${GOFUMPT_VERSION} \
-	&& mv /go/bin/gofumports /bin/gofumports
+RUN go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} \
+	&& mv /go/bin/gofumpt /bin/gofumpt
+ARG GOIMPORTS_VERSION
+RUN go install golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} \
+	&& mv /go/bin/goimports /bin/goimports
 ARG PROTOBUF_GO_VERSION
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v${PROTOBUF_GO_VERSION}
 RUN mv /go/bin/protoc-gen-go /bin
@@ -43,8 +46,11 @@ ARG GRPC_GATEWAY_VERSION
 RUN go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v${GRPC_GATEWAY_VERSION}
 RUN mv /go/bin/protoc-gen-grpc-gateway /bin
 ARG VTPROTOBUF_VERSION
-RUN go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@${VTPROTOBUF_VERSION}
+RUN go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@v${VTPROTOBUF_VERSION}
 RUN mv /go/bin/protoc-gen-go-vtproto /bin
+ARG DEEPCOPY_VERSION
+RUN go install github.com/siderolabs/deep-copy@${DEEPCOPY_VERSION} \
+	&& mv /go/bin/deep-copy /bin/deep-copy
 
 # tools and sources
 FROM tools AS base
@@ -62,16 +68,19 @@ RUN --mount=type=cache,target=/go/pkg go list -mod=readonly all >/dev/null
 # runs protobuf compiler
 FROM tools AS proto-compile
 COPY --from=proto-specs / /
-RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/events/events.proto
-RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/siderolink/provision.proto
+RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/events/events.proto /api/siderolink/provision.proto
 RUN rm /api/events/events.proto
 RUN rm /api/siderolink/provision.proto
+RUN goimports -w -local github.com/talos-systems/siderolink /api
+RUN gofumpt -w /api
 
 # runs gofumpt
 FROM base AS lint-gofumpt
-RUN find . -name '*.pb.go' | xargs -r rm
-RUN find . -name '*.pb.gw.go' | xargs -r rm
-RUN FILES="$(gofumports -l -local github.com/talos-systems/siderolink .)" && test -z "${FILES}" || (echo -e "Source code is not formatted with 'gofumports -w -local github.com/talos-systems/siderolink .':\n${FILES}"; exit 1)
+RUN FILES="$(gofumpt -l .)" && test -z "${FILES}" || (echo -e "Source code is not formatted with 'gofumpt -w .':\n${FILES}"; exit 1)
+
+# runs goimports
+FROM base AS lint-goimports
+RUN FILES="$(goimports -l -local github.com/talos-systems/siderolink .)" && test -z "${FILES}" || (echo -e "Source code is not formatted with 'goimports -w -local github.com/talos-systems/siderolink .':\n${FILES}"; exit 1)
 
 # runs golangci-lint
 FROM base AS lint-golangci-lint
@@ -96,14 +105,59 @@ COPY --from=proto-compile /api/ /api/
 FROM scratch AS unit-tests
 COPY --from=unit-tests-run /src/coverage.txt /coverage.txt
 
+# builds siderolink-agent-darwin-amd64
+FROM base AS siderolink-agent-darwin-amd64-build
+COPY --from=generate / /
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=amd64 GOOS=darwin go build -ldflags "-s -w" -o /siderolink-agent-darwin-amd64
+
+# builds siderolink-agent-darwin-arm64
+FROM base AS siderolink-agent-darwin-arm64-build
+COPY --from=generate / /
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=arm64 GOOS=darwin go build -ldflags "-s -w" -o /siderolink-agent-darwin-arm64
+
 # builds siderolink-agent-linux-amd64
 FROM base AS siderolink-agent-linux-amd64-build
 COPY --from=generate / /
 WORKDIR /src/cmd/siderolink-agent
-RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg go build -ldflags "-s -w" -o /siderolink-agent-linux-amd64
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=amd64 GOOS=linux go build -ldflags "-s -w" -o /siderolink-agent-linux-amd64
+
+# builds siderolink-agent-linux-arm64
+FROM base AS siderolink-agent-linux-arm64-build
+COPY --from=generate / /
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=arm64 GOOS=linux go build -ldflags "-s -w" -o /siderolink-agent-linux-arm64
+
+# builds siderolink-agent-linux-armv7
+FROM base AS siderolink-agent-linux-armv7-build
+COPY --from=generate / /
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=arm GOARM=7 GOOS=linux go build -ldflags "-s -w" -o /siderolink-agent-linux-armv7
+
+# builds siderolink-agent-windows-amd64.exe
+FROM base AS siderolink-agent-windows-amd64.exe-build
+COPY --from=generate / /
+WORKDIR /src/cmd/siderolink-agent
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg GOARCH=amd64 GOOS=windows go build -ldflags "-s -w" -o /siderolink-agent-windows-amd64.exe
+
+FROM scratch AS siderolink-agent-darwin-amd64
+COPY --from=siderolink-agent-darwin-amd64-build /siderolink-agent-darwin-amd64 /siderolink-agent-darwin-amd64
+
+FROM scratch AS siderolink-agent-darwin-arm64
+COPY --from=siderolink-agent-darwin-arm64-build /siderolink-agent-darwin-arm64 /siderolink-agent-darwin-arm64
 
 FROM scratch AS siderolink-agent-linux-amd64
 COPY --from=siderolink-agent-linux-amd64-build /siderolink-agent-linux-amd64 /siderolink-agent-linux-amd64
+
+FROM scratch AS siderolink-agent-linux-arm64
+COPY --from=siderolink-agent-linux-arm64-build /siderolink-agent-linux-arm64 /siderolink-agent-linux-arm64
+
+FROM scratch AS siderolink-agent-linux-armv7
+COPY --from=siderolink-agent-linux-armv7-build /siderolink-agent-linux-armv7 /siderolink-agent-linux-armv7
+
+FROM scratch AS siderolink-agent-windows-amd64.exe
+COPY --from=siderolink-agent-windows-amd64.exe-build /siderolink-agent-windows-amd64.exe /siderolink-agent-windows-amd64.exe
 
 FROM siderolink-agent-linux-${TARGETARCH} AS siderolink-agent
 

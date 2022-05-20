@@ -1,6 +1,6 @@
 module github.com/talos-systems/siderolink
 
-go 1.17
+go 1.18
 
 require (
 	github.com/jsimonetti/rtnetlink v0.0.0-20211022192332-93da33804786

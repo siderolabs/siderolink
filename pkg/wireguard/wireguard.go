@@ -9,13 +9,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/jsimonetti/rtnetlink/rtnl"
 	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/ipc"
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -27,7 +25,6 @@ const interfaceName = "siderolink"
 // Device manages Wireguard link.
 type Device struct {
 	tun        tun.Device
-	fileUAPI   *os.File
 	address    netaddr.IPPrefix
 	privateKey wgtypes.Key
 	listenPort uint16
@@ -46,11 +43,6 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 	dev.tun, err = tun.CreateTUN(interfaceName, device.DefaultMTU)
 	if err != nil {
 		return nil, fmt.Errorf("error creating tun device: %w", err)
-	}
-
-	dev.fileUAPI, err = ipc.UAPIOpen(interfaceName)
-	if err != nil {
-		return nil, fmt.Errorf("error listening on UAPI socket: %w", err)
 	}
 
 	return dev, nil
@@ -77,7 +69,7 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 		Errorf:   logger.Sugar().Errorf,
 	}
 
-	uapi, err := ipc.UAPIListen(interfaceName, dev.fileUAPI)
+	uapi, err := UAPIOpen(interfaceName)
 	if err != nil {
 		return fmt.Errorf("error listenening on uapi socket: %w", err)
 	}
