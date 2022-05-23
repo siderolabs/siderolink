@@ -23,6 +23,7 @@ import (
 var sideroLinkFlags struct {
 	wireguardEndpoint string
 	apiEndpoint       string
+	joinToken         string
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
@@ -56,6 +57,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 		ServerAddress:   serverAddr.IP(),
 		ServerEndpoint:  wireguardEndpoint,
 		ServerPublicKey: privateKey.PublicKey(),
+		JoinToken:       sideroLinkFlags.joinToken,
 	})
 
 	s := grpc.NewServer()

@@ -33,6 +33,7 @@ type Config struct {
 	NodePrefix      netaddr.IPPrefix
 	ServerAddress   netaddr.IP
 	ServerEndpoint  netaddr.IPPort
+	JoinToken       string
 	ServerPublicKey wgtypes.Key
 }
 
@@ -51,6 +52,10 @@ func (srv *Server) EventCh() <-chan wireguard.PeerEvent {
 
 // Provision the SideroLink.
 func (srv *Server) Provision(ctx context.Context, req *pb.ProvisionRequest) (*pb.ProvisionResponse, error) {
+	if srv.cfg.JoinToken != "" && (req.JoinToken == nil || *req.JoinToken != srv.cfg.JoinToken) {
+		return nil, status.Error(codes.PermissionDenied, "invalid join token")
+	}
+
 	// generated random address for the node
 	raw := srv.cfg.NodePrefix.IP().As16()
 	salt := make([]byte, 8)

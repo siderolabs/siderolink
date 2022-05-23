@@ -49,6 +49,13 @@ func (m *ProvisionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.JoinToken != nil {
+		i -= len(*m.JoinToken)
+		copy(dAtA[i:], *m.JoinToken)
+		i = encodeVarint(dAtA, i, uint64(len(*m.JoinToken)))
+		i--
+		dAtA[i] = 0x1a
+	}
 	if len(m.NodePublicKey) > 0 {
 		i -= len(m.NodePublicKey)
 		copy(dAtA[i:], m.NodePublicKey)
@@ -150,6 +157,10 @@ func (m *ProvisionRequest) SizeVT() (n int) {
 	}
 	l = len(m.NodePublicKey)
 	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.JoinToken != nil {
+		l = len(*m.JoinToken)
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -284,6 +295,39 @@ func (m *ProvisionRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.NodePublicKey = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field JoinToken", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.JoinToken = &s
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

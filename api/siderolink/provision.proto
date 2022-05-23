@@ -16,6 +16,8 @@ message ProvisionRequest {
     string node_uuid = 1;
     // Wireguard public key (as string) of the node.
     string node_public_key = 2;
+    // Join token (as string) of the node.
+    optional string join_token = 3;
 }
 
 message ProvisionResponse {
