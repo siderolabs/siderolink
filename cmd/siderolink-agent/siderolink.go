@@ -32,7 +32,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 		return fmt.Errorf("error listening for gRPC API: %w", err)
 	}
 
-	privateKey, err := wgtypes.GenerateKey()
+	privateKey, err := wgtypes.GeneratePrivateKey()
 	if err != nil {
 		return fmt.Errorf("error generating key: %w", err)
 	}
