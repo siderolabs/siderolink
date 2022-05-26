@@ -20,7 +20,8 @@ type PeerSource interface {
 type PeerEvent struct {
 	PubKey wgtypes.Key
 
-	Remove bool
+	Remove   bool
+	Endpoint string
 
 	Address netaddr.IP
 }

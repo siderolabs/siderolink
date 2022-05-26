@@ -232,6 +232,15 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 			*netaddr.IPPrefixFrom(peerEvent.Address, peerEvent.Address.BitLen()).IPNet(),
 		}
 
+		if peerEvent.Endpoint != "" {
+			ip, err := netaddr.ParseIPPort(peerEvent.Endpoint)
+			if err != nil {
+				return fmt.Errorf("failed to parse last endpoint: %w", err)
+			}
+
+			cfg.Peers[0].Endpoint = ip.UDPAddr()
+		}
+
 		logger.Info("updating peer", zap.Stringer("public_key", peerEvent.PubKey), zap.Stringer("address", peerEvent.Address))
 	} else {
 		logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
