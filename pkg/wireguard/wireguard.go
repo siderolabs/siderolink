@@ -7,8 +7,12 @@ package wireguard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"sync"
+	"time"
 
 	"github.com/jsimonetti/rtnetlink/rtnl"
 	"go.uber.org/zap"
@@ -20,13 +24,23 @@ import (
 	"inet.af/netaddr"
 )
 
+// PeerDownInterval is the time since last handshake when established peer is considered to be down.
+//
+// WG whitepaper defines a downed peer as being:
+// Handshake Timeout (180s) + Rekey Timeout (5s) + Rekey Attempt Timeout (90s)
+//
+// This interval is applied when the link is already established.
+const PeerDownInterval = (180 + 5 + 90) * time.Second
+
 const interfaceName = "siderolink"
 
 // Device manages Wireguard link.
 type Device struct {
+	client     *wgctrl.Client
 	tun        tun.Device
 	address    netaddr.IPPrefix
 	privateKey wgtypes.Key
+	clientMu   sync.Mutex
 	listenPort uint16
 }
 
@@ -45,18 +59,16 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 		return nil, fmt.Errorf("error creating tun device: %w", err)
 	}
 
+	dev.client, err = wgctrl.New()
+	if err != nil {
+		return nil, fmt.Errorf("error initializing Wireguard client: %w", err)
+	}
+
 	return dev, nil
 }
 
 // Run the device.
 func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) error {
-	client, err := wgctrl.New()
-	if err != nil {
-		return fmt.Errorf("error initializing Wireguard client: %w", err)
-	}
-
-	defer client.Close() //nolint:errcheck
-
 	rtnlClient, err := rtnl.Dial(nil)
 	if err != nil {
 		return fmt.Errorf("error initializing netlink client: %w", err)
@@ -95,12 +107,7 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 		}
 	}()
 
-	listenPort := int(dev.listenPort)
-
-	if err = client.ConfigureDevice(interfaceName, wgtypes.Config{
-		PrivateKey: &dev.privateKey,
-		ListenPort: &listenPort,
-	}); err != nil {
+	if err = dev.configurePrivateKey(); err != nil {
 		return fmt.Errorf("error configuring Wireguard private key: %w", err)
 	}
 
@@ -128,11 +135,40 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 		case <-device.Wait():
 			return nil
 		case peerEvent := <-peers.EventCh():
-			if err := dev.handlePeerEvent(client, logger, peerEvent); err != nil {
+			if err = dev.handlePeerEvent(logger, peerEvent); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+// Peers returns underlying peer states from the underlying wireguard device.
+func (dev *Device) Peers() ([]wgtypes.Peer, error) {
+	dev.clientMu.Lock()
+	defer dev.clientMu.Unlock()
+
+	wgDevice, err := dev.client.Device(interfaceName)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("error fetching wireguard link status: %w", err)
+	}
+
+	if wgDevice == nil {
+		return []wgtypes.Peer{}, nil
+	}
+
+	return wgDevice.Peers, nil
+}
+
+func (dev *Device) configurePrivateKey() error {
+	dev.clientMu.Lock()
+	defer dev.clientMu.Unlock()
+
+	listenPort := int(dev.listenPort)
+
+	return dev.client.ConfigureDevice(interfaceName, wgtypes.Config{
+		PrivateKey: &dev.privateKey,
+		ListenPort: &listenPort,
+	})
 }
 
 func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) (bool, error) {
@@ -166,9 +202,12 @@ func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logge
 	return false, nil
 }
 
-func (dev *Device) handlePeerEvent(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) error {
+func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) error {
+	dev.clientMu.Lock()
+	defer dev.clientMu.Unlock()
+
 	if !peerEvent.Remove {
-		skipEvent, err := dev.checkDuplicateUpdate(client, logger, peerEvent)
+		skipEvent, err := dev.checkDuplicateUpdate(dev.client, logger, peerEvent)
 		if err != nil {
 			return err
 		}
@@ -198,7 +237,7 @@ func (dev *Device) handlePeerEvent(client *wgctrl.Client, logger *zap.Logger, pe
 		logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
 	}
 
-	if err := client.ConfigureDevice(interfaceName, cfg); err != nil {
+	if err := dev.client.ConfigureDevice(interfaceName, cfg); err != nil {
 		return fmt.Errorf("error configuring Wireguard peers: %w", err)
 	}
 
@@ -207,5 +246,13 @@ func (dev *Device) handlePeerEvent(client *wgctrl.Client, logger *zap.Logger, pe
 
 // Close the device.
 func (dev *Device) Close() error {
+	if err := dev.tun.Close(); err != nil {
+		return err
+	}
+
+	if err := dev.client.Close(); err != nil {
+		return err
+	}
+
 	return nil
 }
