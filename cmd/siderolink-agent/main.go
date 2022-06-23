@@ -21,6 +21,7 @@ func main() {
 	flag.StringVar(&sideroLinkFlags.wireguardEndpoint, "sidero-link-wireguard-endpoint", "172.20.0.1:51821", "advertised Wireguard endpoint")
 	flag.StringVar(&sideroLinkFlags.apiEndpoint, "sidero-link-api-endpoint", ":4000", "gRPC API endpoint for the SideroLink")
 	flag.StringVar(&sideroLinkFlags.joinToken, "sidero-link-join-token", "", "join token")
+	flag.BoolVar(&sideroLinkFlags.forceUserspace, "sidero-link-force-userspace", false, "force usage of userspace UDP device for Wireguard")
 	flag.StringVar(&eventSinkFlags.apiEndpoint, "event-sink-endpoint", ":8080", "gRPC API endpoint for the Event Sink")
 	flag.StringVar(&logReceiverFlags.endpoint, "log-receiver-endpoint", ":4001", "TCP log receiver endpoint")
 	flag.Parse()

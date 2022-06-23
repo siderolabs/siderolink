@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// Package wireguard manages user-space Wireguard interface.
+// Package wireguard manages kernel and user-space Wireguard interfaces.
 package wireguard
 
 import (
@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jsimonetti/rtnetlink/rtnl"
 	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -24,19 +23,24 @@ import (
 	"inet.af/netaddr"
 )
 
-// PeerDownInterval is the time since last handshake when established peer is considered to be down.
-//
-// WG whitepaper defines a downed peer as being:
-// Handshake Timeout (180s) + Rekey Timeout (5s) + Rekey Attempt Timeout (90s)
-//
-// This interval is applied when the link is already established.
-const PeerDownInterval = (180 + 5 + 90) * time.Second
+const (
+	// PeerDownInterval is the time since last handshake when established peer is considered to be down.
+	//
+	// WG whitepaper defines a downed peer as being:
+	// Handshake Timeout (180s) + Rekey Timeout (5s) + Rekey Attempt Timeout (90s)
+	//
+	// This interval is applied when the link is already established.
+	PeerDownInterval = (180 + 5 + 90) * time.Second
 
-const interfaceName = "siderolink"
+	linkKindWireguard = "wireguard"
+)
 
 // Device manages Wireguard link.
 type Device struct {
-	client     *wgctrl.Client
+	client *wgctrl.Client
+	// ifaceName is the name of the underlying Wireguard interface.
+	ifaceName string
+	// tun is the underlying userspace wireguard tun device. Its value is nil if native wireguard is used.
 	tun        tun.Device
 	address    netaddr.IPPrefix
 	privateKey wgtypes.Key
@@ -45,7 +49,9 @@ type Device struct {
 }
 
 // NewDevice creates a new device with settings.
-func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint16) (*Device, error) {
+func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint16,
+	forceUserspace bool, logger *zap.Logger,
+) (*Device, error) {
 	dev := &Device{
 		address:    address,
 		privateKey: privateKey,
@@ -54,14 +60,33 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 
 	var err error
 
+	dev.client, err = wgctrl.New()
+	if err != nil {
+		return nil, fmt.Errorf("error initializing Wireguard client: %w", err)
+	}
+
+	if !forceUserspace {
+		// attempt to configure a native Wireguard device
+		dev.ifaceName, err = createWireguardDevice(interfaceName)
+		if err == nil {
+			logger.Sugar().Info("using native Wireguard device")
+
+			return dev, nil
+		}
+
+		logger.Sugar().Infof("failed to configure native Wireguard device: %s", err)
+	}
+
+	logger.Sugar().Info("attempting to configure tun device (userspace)")
+
 	dev.tun, err = tun.CreateTUN(interfaceName, device.DefaultMTU)
 	if err != nil {
 		return nil, fmt.Errorf("error creating tun device: %w", err)
 	}
 
-	dev.client, err = wgctrl.New()
+	dev.ifaceName, err = dev.tun.Name()
 	if err != nil {
-		return nil, fmt.Errorf("error initializing Wireguard client: %w", err)
+		return nil, fmt.Errorf("error getting tun device name: %w", err)
 	}
 
 	return dev, nil
@@ -69,62 +94,65 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 
 // Run the device.
 func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) error {
-	rtnlClient, err := rtnl.Dial(nil)
-	if err != nil {
-		return fmt.Errorf("error initializing netlink client: %w", err)
-	}
-
-	defer rtnlClient.Close() //nolint:errcheck
-
-	wgLogger := &device.Logger{
-		Verbosef: logger.Sugar().Debugf,
-		Errorf:   logger.Sugar().Errorf,
-	}
-
-	uapi, err := UAPIOpen(interfaceName)
-	if err != nil {
-		return fmt.Errorf("error listenening on uapi socket: %w", err)
-	}
-
-	defer uapi.Close() //nolint:errcheck
-
-	device := device.NewDevice(dev.tun, conn.NewDefaultBind(), wgLogger)
-
-	defer device.Close()
+	var tunDevice *device.Device
 
 	errs := make(chan error)
 
-	go func() {
-		for {
-			conn, e := uapi.Accept()
-			if e != nil {
-				errs <- e
-
-				return
-			}
-
-			go device.IpcHandle(conn)
+	// configure tun device
+	if dev.tun != nil {
+		wgLogger := &device.Logger{
+			Verbosef: logger.Sugar().Debugf,
+			Errorf:   logger.Sugar().Errorf,
 		}
-	}()
 
-	if err = dev.configurePrivateKey(); err != nil {
+		uapi, err2 := UAPIOpen(dev.ifaceName)
+		if err2 != nil {
+			return fmt.Errorf("error listening on uapi socket: %w", err2)
+		}
+
+		defer uapi.Close() //nolint:errcheck
+
+		tunDevice = device.NewDevice(dev.tun, conn.NewDefaultBind(), wgLogger)
+		defer tunDevice.Close()
+
+		go func() {
+			for {
+				c, e := uapi.Accept()
+				if e != nil {
+					errs <- e
+
+					return
+				}
+
+				go tunDevice.IpcHandle(c)
+			}
+		}()
+	}
+
+	if err := dev.configurePrivateKey(); err != nil {
 		return fmt.Errorf("error configuring Wireguard private key: %w", err)
 	}
 
-	iface, err := net.InterfaceByName(interfaceName)
+	iface, err := net.InterfaceByName(dev.ifaceName)
 	if err != nil {
 		return fmt.Errorf("error finding interface: %w", err)
 	}
 
-	if err = rtnlClient.AddrAdd(iface, dev.address.IPNet()); err != nil {
+	if err = addIPToInterface(iface, dev.address.IPNet()); err != nil {
 		return fmt.Errorf("error setting address: %w", err)
 	}
 
-	if err = rtnlClient.LinkUp(iface); err != nil {
+	if err = linkUp(iface); err != nil {
 		return fmt.Errorf("error bringing link up: %w", err)
 	}
 
-	logger.Info("wireguard device set up", zap.String("interface", interfaceName), zap.Stringer("address", dev.address))
+	logger.Info("wireguard device set up", zap.String("interface", dev.ifaceName), zap.Stringer("address", dev.address))
+
+	var tunDeviceWait chan struct{}
+
+	if tunDevice != nil {
+		tunDeviceWait = tunDevice.Wait()
+	}
 
 	for {
 		select {
@@ -132,7 +160,7 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 			return nil
 		case <-errs:
 			return nil
-		case <-device.Wait():
+		case <-tunDeviceWait:
 			return nil
 		case peerEvent := <-peers.EventCh():
 			if err = dev.handlePeerEvent(logger, peerEvent); err != nil {
@@ -147,7 +175,7 @@ func (dev *Device) Peers() ([]wgtypes.Peer, error) {
 	dev.clientMu.Lock()
 	defer dev.clientMu.Unlock()
 
-	wgDevice, err := dev.client.Device(interfaceName)
+	wgDevice, err := dev.client.Device(dev.ifaceName)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("error fetching wireguard link status: %w", err)
 	}
@@ -165,14 +193,14 @@ func (dev *Device) configurePrivateKey() error {
 
 	listenPort := int(dev.listenPort)
 
-	return dev.client.ConfigureDevice(interfaceName, wgtypes.Config{
+	return dev.client.ConfigureDevice(dev.ifaceName, wgtypes.Config{
 		PrivateKey: &dev.privateKey,
 		ListenPort: &listenPort,
 	})
 }
 
 func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) (bool, error) {
-	oldCfg, err := client.Device(interfaceName)
+	oldCfg, err := client.Device(dev.ifaceName)
 	if err != nil {
 		return false, fmt.Errorf("error retrieving Wireguard configuration: %w", err)
 	}
@@ -246,7 +274,7 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 		logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
 	}
 
-	if err := dev.client.ConfigureDevice(interfaceName, cfg); err != nil {
+	if err := dev.client.ConfigureDevice(dev.ifaceName, cfg); err != nil {
 		return fmt.Errorf("error configuring Wireguard peers: %w", err)
 	}
 
@@ -255,8 +283,14 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 
 // Close the device.
 func (dev *Device) Close() error {
-	if err := dev.tun.Close(); err != nil {
-		return err
+	if dev.tun != nil {
+		if err := dev.tun.Close(); err != nil {
+			return err
+		}
+	} else {
+		if err := deleteWireguardDevice(dev.ifaceName); err != nil {
+			return err
+		}
 	}
 
 	if err := dev.client.Close(); err != nil {

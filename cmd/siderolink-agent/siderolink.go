@@ -24,6 +24,7 @@ var sideroLinkFlags struct {
 	wireguardEndpoint string
 	apiEndpoint       string
 	joinToken         string
+	forceUserspace    bool
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
@@ -45,12 +46,11 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 		return fmt.Errorf("invalid Wireguard endpoint: %w", err)
 	}
 
-	wgDevice, err := wireguard.NewDevice(serverAddr, privateKey, wireguardEndpoint.Port())
+	wgDevice, err := wireguard.NewDevice(serverAddr, privateKey, wireguardEndpoint.Port(),
+		sideroLinkFlags.forceUserspace, logger)
 	if err != nil {
 		return fmt.Errorf("error initializing wgDevice: %w", err)
 	}
-
-	defer wgDevice.Close() //nolint:errcheck
 
 	srv := server.NewServer(server.Config{
 		NodePrefix:      nodePrefix,
@@ -64,6 +64,8 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 	pb.RegisterProvisionServiceServer(s, srv)
 
 	eg.Go(func() error {
+		defer wgDevice.Close() //nolint:errcheck
+
 		return wgDevice.Run(ctx, logger, srv)
 	})
 
