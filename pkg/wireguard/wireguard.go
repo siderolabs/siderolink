@@ -71,6 +71,11 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 		if err == nil {
 			logger.Sugar().Info("using native Wireguard device")
 
+			err = setupIPToInterface(dev)
+			if err != nil {
+				return nil, err
+			}
+
 			return dev, nil
 		}
 
@@ -89,7 +94,25 @@ func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint
 		return nil, fmt.Errorf("error getting tun device name: %w", err)
 	}
 
+	err = setupIPToInterface(dev)
+	if err != nil {
+		return nil, err
+	}
+
 	return dev, nil
+}
+
+func setupIPToInterface(dev *Device) error {
+	iface, err := net.InterfaceByName(dev.ifaceName)
+	if err != nil {
+		return fmt.Errorf("error finding interface: %w", err)
+	}
+
+	if err = addIPToInterface(iface, dev.address.IPNet()); err != nil {
+		return fmt.Errorf("error setting address: %w", err)
+	}
+
+	return nil
 }
 
 // Run the device.
@@ -136,10 +159,6 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 	iface, err := net.InterfaceByName(dev.ifaceName)
 	if err != nil {
 		return fmt.Errorf("error finding interface: %w", err)
-	}
-
-	if err = addIPToInterface(iface, dev.address.IPNet()); err != nil {
-		return fmt.Errorf("error setting address: %w", err)
 	}
 
 	if err = linkUp(iface); err != nil {
