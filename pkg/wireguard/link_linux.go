@@ -7,7 +7,9 @@
 package wireguard
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 
 	"github.com/jsimonetti/rtnetlink"
 	"golang.org/x/sys/unix"
@@ -32,7 +34,7 @@ func createWireguardDevice(name string) (string, error) {
 			},
 		},
 	})
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return "", fmt.Errorf("error creating wireguard device: %w", err)
 	}
 

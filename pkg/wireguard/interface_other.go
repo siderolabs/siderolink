@@ -7,7 +7,9 @@
 package wireguard
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 
 	"github.com/jsimonetti/rtnetlink/rtnl"
@@ -34,5 +36,10 @@ func addIPToInterface(iface *net.Interface, ipNet *net.IPNet) error {
 
 	defer rtnlClient.Close() //nolint:errcheck
 
-	return rtnlClient.AddrAdd(iface, ipNet)
+	err = rtnlClient.AddrAdd(iface, ipNet)
+	if err != nil && errors.Is(err, fs.ErrExist) {
+		err = nil
+	}
+
+	return err
 }
