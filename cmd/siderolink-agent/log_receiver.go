@@ -7,10 +7,10 @@ package main
 import (
 	"context"
 	"net"
+	"net/netip"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"inet.af/netaddr"
 
 	"github.com/talos-systems/siderolink/pkg/logreceiver"
 )
@@ -20,7 +20,7 @@ var logReceiverFlags struct {
 }
 
 func logHandler(logger *zap.Logger) logreceiver.Handler {
-	return func(srcAddress netaddr.IP, msg map[string]interface{}) {
+	return func(srcAddress netip.Addr, msg map[string]interface{}) {
 		logger.Info("kernel log message", zap.Stringer("src_address", srcAddress), zap.Any("msg", msg))
 	}
 }

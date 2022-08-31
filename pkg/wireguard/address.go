@@ -5,14 +5,15 @@
 package wireguard
 
 import (
+	"net/netip"
+
 	"github.com/talos-systems/talos/pkg/machinery/resources/network"
-	"inet.af/netaddr"
 )
 
 // NetworkPrefix returns IPv6 prefix for the SideroLink.
 //
 // Server is using the first address in the block.
 // Nodes are using random addresses from the /64 space.
-func NetworkPrefix(installationID string) netaddr.IPPrefix {
+func NetworkPrefix(installationID string) netip.Prefix {
 	return network.ULAPrefix(installationID, network.ULASideroLink)
 }

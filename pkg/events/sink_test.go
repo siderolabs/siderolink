@@ -18,6 +18,7 @@ import (
 	"github.com/talos-systems/talos/pkg/machinery/api/machine"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -99,7 +100,7 @@ func (suite *SinkSuite) TearDownSuite() {
 }
 
 func (suite *SinkSuite) TestPublish() {
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", suite.sock), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", suite.sock), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	suite.Require().NoError(err)
 
 	defer conn.Close() //nolint:errcheck

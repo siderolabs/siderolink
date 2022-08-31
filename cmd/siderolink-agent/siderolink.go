@@ -8,12 +8,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
-	"inet.af/netaddr"
 
 	pb "github.com/talos-systems/siderolink/api/siderolink"
 	"github.com/talos-systems/siderolink/internal/server"
@@ -39,9 +39,9 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 	}
 
 	nodePrefix := wireguard.NetworkPrefix("")
-	serverAddr := netaddr.IPPrefixFrom(nodePrefix.IP().Next(), nodePrefix.Bits())
+	serverAddr := netip.PrefixFrom(nodePrefix.Addr().Next(), nodePrefix.Bits())
 
-	wireguardEndpoint, err := netaddr.ParseIPPort(sideroLinkFlags.wireguardEndpoint)
+	wireguardEndpoint, err := netip.ParseAddrPort(sideroLinkFlags.wireguardEndpoint)
 	if err != nil {
 		return fmt.Errorf("invalid Wireguard endpoint: %w", err)
 	}
@@ -54,7 +54,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 
 	srv := server.NewServer(server.Config{
 		NodePrefix:      nodePrefix,
-		ServerAddress:   serverAddr.IP(),
+		ServerAddress:   serverAddr.Addr(),
 		ServerEndpoint:  wireguardEndpoint,
 		ServerPublicKey: privateKey.PublicKey(),
 		JoinToken:       sideroLinkFlags.joinToken,

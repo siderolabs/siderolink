@@ -10,11 +10,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"net/netip"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"inet.af/netaddr"
 
 	pb "github.com/talos-systems/siderolink/api/siderolink"
 	"github.com/talos-systems/siderolink/pkg/wireguard"
@@ -30,9 +30,9 @@ type Server struct {
 
 // Config configures the server.
 type Config struct {
-	NodePrefix      netaddr.IPPrefix
-	ServerAddress   netaddr.IP
-	ServerEndpoint  netaddr.IPPort
+	NodePrefix      netip.Prefix
+	ServerAddress   netip.Addr
+	ServerEndpoint  netip.AddrPort
 	JoinToken       string
 	ServerPublicKey wgtypes.Key
 }
@@ -57,7 +57,7 @@ func (srv *Server) Provision(ctx context.Context, req *pb.ProvisionRequest) (*pb
 	}
 
 	// generated random address for the node
-	raw := srv.cfg.NodePrefix.IP().As16()
+	raw := srv.cfg.NodePrefix.Addr().As16()
 	salt := make([]byte, 8)
 
 	_, err := io.ReadFull(rand.Reader, salt)
@@ -67,7 +67,7 @@ func (srv *Server) Provision(ctx context.Context, req *pb.ProvisionRequest) (*pb
 
 	copy(raw[8:], salt)
 
-	nodeAddress := netaddr.IPPrefixFrom(netaddr.IPFrom16(raw), srv.cfg.NodePrefix.Bits())
+	nodeAddress := netip.PrefixFrom(netip.AddrFrom16(raw), srv.cfg.NodePrefix.Bits())
 
 	pubKey, err := wgtypes.ParseKey(req.NodePublicKey)
 	if err != nil {
@@ -76,7 +76,7 @@ func (srv *Server) Provision(ctx context.Context, req *pb.ProvisionRequest) (*pb
 
 	srv.eventCh <- wireguard.PeerEvent{
 		PubKey:  pubKey,
-		Address: nodeAddress.IP(),
+		Address: nodeAddress.Addr(),
 	}
 
 	return &pb.ProvisionResponse{

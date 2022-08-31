@@ -10,17 +10,18 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"go4.org/netipx"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"inet.af/netaddr"
 )
 
 const (
@@ -42,14 +43,14 @@ type Device struct {
 	ifaceName string
 	// tun is the underlying userspace wireguard tun device. Its value is nil if native wireguard is used.
 	tun        tun.Device
-	address    netaddr.IPPrefix
+	address    netip.Prefix
 	privateKey wgtypes.Key
 	clientMu   sync.Mutex
 	listenPort uint16
 }
 
 // NewDevice creates a new device with settings.
-func NewDevice(address netaddr.IPPrefix, privateKey wgtypes.Key, listenPort uint16,
+func NewDevice(address netip.Prefix, privateKey wgtypes.Key, listenPort uint16,
 	forceUserspace bool, logger *zap.Logger,
 ) (*Device, error) {
 	dev := &Device{
@@ -108,7 +109,7 @@ func setupIPToInterface(dev *Device) error {
 		return fmt.Errorf("error finding interface: %w", err)
 	}
 
-	if err = addIPToInterface(iface, dev.address.IPNet()); err != nil {
+	if err = addIPToInterface(iface, netipx.PrefixIPNet(dev.address)); err != nil {
 		return fmt.Errorf("error setting address: %w", err)
 	}
 
@@ -233,8 +234,8 @@ func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logge
 				break
 			}
 
-			if prefix, ok := netaddr.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
-				if prefix.IP() == peerEvent.Address {
+			if prefix, ok := netipx.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
+				if prefix.Addr() == peerEvent.Address {
 					// skip the update
 					logger.Info("skipping peer update", zap.String("public_key", pubKey))
 
@@ -276,16 +277,16 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 	if !peerEvent.Remove {
 		cfg.Peers[0].ReplaceAllowedIPs = true
 		cfg.Peers[0].AllowedIPs = []net.IPNet{
-			*netaddr.IPPrefixFrom(peerEvent.Address, peerEvent.Address.BitLen()).IPNet(),
+			*netipx.PrefixIPNet(netip.PrefixFrom(peerEvent.Address, peerEvent.Address.BitLen())),
 		}
 
 		if peerEvent.Endpoint != "" {
-			ip, err := netaddr.ParseIPPort(peerEvent.Endpoint)
+			ip, err := netip.ParseAddrPort(peerEvent.Endpoint)
 			if err != nil {
 				return fmt.Errorf("failed to parse last endpoint: %w", err)
 			}
 
-			cfg.Peers[0].Endpoint = ip.UDPAddr()
+			cfg.Peers[0].Endpoint = asUDP(ip)
 		}
 
 		logger.Info("updating peer", zap.Stringer("public_key", peerEvent.PubKey), zap.Stringer("address", peerEvent.Address))
@@ -317,4 +318,12 @@ func (dev *Device) Close() error {
 	}
 
 	return nil
+}
+
+func asUDP(addr netip.AddrPort) *net.UDPAddr {
+	return &net.UDPAddr{
+		IP:   addr.Addr().AsSlice(),
+		Port: int(addr.Port()),
+		Zone: addr.Addr().Zone(),
+	}
 }

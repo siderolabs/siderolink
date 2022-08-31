@@ -2,12 +2,12 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2022-05-26T16:44:50Z by kres latest.
+# Generated on 2022-08-31T10:23:45Z by kres latest.
 
 ARG TOOLCHAIN
 
 # runs markdownlint
-FROM node:18.2.0-alpine AS lint-markdown
+FROM node:18.7.0-alpine AS lint-markdown
 WORKDIR /src
 RUN npm i -g markdownlint-cli@0.31.1
 RUN npm i sentences-per-line@0.2.1
@@ -30,7 +30,8 @@ ENV GO111MODULE on
 ENV CGO_ENABLED 0
 ENV GOPATH /go
 ARG GOLANGCILINT_VERSION
-RUN curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCILINT_VERSION}/install.sh | bash -s -- -b /bin ${GOLANGCILINT_VERSION}
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCILINT_VERSION} \
+	&& mv /go/bin/golangci-lint /bin/golangci-lint
 ARG GOFUMPT_VERSION
 RUN go install mvdan.cc/gofumpt@${GOFUMPT_VERSION} \
 	&& mv /go/bin/gofumpt /bin/gofumpt

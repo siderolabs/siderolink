@@ -5,8 +5,9 @@
 package wireguard
 
 import (
+	"net/netip"
+
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"inet.af/netaddr"
 )
 
 // PeerSource is the interface of the "database" providing SideroLink peer information.
@@ -23,5 +24,5 @@ type PeerEvent struct {
 	Remove   bool
 	Endpoint string
 
-	Address netaddr.IP
+	Address netip.Addr
 }
