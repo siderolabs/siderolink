@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/talos-systems/siderolink/pkg/logreceiver"
+	"github.com/siderolabs/siderolink/pkg/logreceiver"
 )
 
 var logReceiverFlags struct {

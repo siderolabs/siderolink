@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package events;
 
-option go_package = "github.com/talos-systems/siderolink/api/events";
+option go_package = "github.com/siderolabs/siderolink/api/events";
 
 import "google/protobuf/any.proto";
 

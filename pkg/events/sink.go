@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/talos-systems/siderolink/api/events"
+	"github.com/siderolabs/siderolink/api/events"
 )
 
 // Adapter is an abstract event stream receiver.

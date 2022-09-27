@@ -1,4 +1,4 @@
-module github.com/talos-systems/siderolink
+module github.com/siderolabs/siderolink
 
 go 1.19
 

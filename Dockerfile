@@ -2,14 +2,14 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2022-08-31T10:23:45Z by kres latest.
+# Generated on 2022-09-27T12:22:46Z by kres 8e6d786.
 
 ARG TOOLCHAIN
 
 # runs markdownlint
-FROM node:18.7.0-alpine AS lint-markdown
+FROM docker.io/node:18.9.0-alpine3.16 AS lint-markdown
 WORKDIR /src
-RUN npm i -g markdownlint-cli@0.31.1
+RUN npm i -g markdownlint-cli@0.32.2
 RUN npm i sentences-per-line@0.2.1
 COPY .markdownlint.json .
 COPY ./README.md ./README.md
@@ -25,7 +25,7 @@ FROM ${TOOLCHAIN} AS toolchain
 RUN apk --update --no-cache add bash curl build-base protoc protobuf-dev
 
 # build tools
-FROM toolchain AS tools
+FROM --platform=${BUILDPLATFORM} toolchain AS tools
 ENV GO111MODULE on
 ENV CGO_ENABLED 0
 ENV GOPATH /go
@@ -73,7 +73,7 @@ COPY --from=proto-specs / /
 RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size /api/events/events.proto /api/siderolink/provision.proto
 RUN rm /api/events/events.proto
 RUN rm /api/siderolink/provision.proto
-RUN goimports -w -local github.com/talos-systems/siderolink /api
+RUN goimports -w -local github.com/siderolabs/siderolink /api
 RUN gofumpt -w /api
 
 # runs gofumpt
@@ -82,7 +82,7 @@ RUN FILES="$(gofumpt -l .)" && test -z "${FILES}" || (echo -e "Source code is no
 
 # runs goimports
 FROM base AS lint-goimports
-RUN FILES="$(goimports -l -local github.com/talos-systems/siderolink .)" && test -z "${FILES}" || (echo -e "Source code is not formatted with 'goimports -w -local github.com/talos-systems/siderolink .':\n${FILES}"; exit 1)
+RUN FILES="$(goimports -l -local github.com/siderolabs/siderolink .)" && test -z "${FILES}" || (echo -e "Source code is not formatted with 'goimports -w -local github.com/siderolabs/siderolink .':\n${FILES}"; exit 1)
 
 # runs golangci-lint
 FROM base AS lint-golangci-lint

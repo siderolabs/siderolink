@@ -16,8 +16,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/talos-systems/siderolink/api/siderolink"
-	"github.com/talos-systems/siderolink/pkg/wireguard"
+	pb "github.com/siderolabs/siderolink/api/siderolink"
+	"github.com/siderolabs/siderolink/pkg/wireguard"
 )
 
 // Server implents gRPC API.

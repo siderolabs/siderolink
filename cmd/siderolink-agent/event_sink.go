@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 
-	eventsapi "github.com/talos-systems/siderolink/api/events"
-	"github.com/talos-systems/siderolink/pkg/events"
+	eventsapi "github.com/siderolabs/siderolink/api/events"
+	"github.com/siderolabs/siderolink/pkg/events"
 )
 
 var eventSinkFlags struct {

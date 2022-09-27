@@ -15,9 +15,9 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
 
-	pb "github.com/talos-systems/siderolink/api/siderolink"
-	"github.com/talos-systems/siderolink/internal/server"
-	"github.com/talos-systems/siderolink/pkg/wireguard"
+	pb "github.com/siderolabs/siderolink/api/siderolink"
+	"github.com/siderolabs/siderolink/internal/server"
+	"github.com/siderolabs/siderolink/pkg/wireguard"
 )
 
 var sideroLinkFlags struct {

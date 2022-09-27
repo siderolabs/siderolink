@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sidero.link;
 
-option go_package = "github.com/talos-systems/siderolink/api/siderolink/pb";
+option go_package = "github.com/siderolabs/siderolink/api/siderolink/pb";
 
 // ProvisionService initiates the SideroLink connection.
 service ProvisionService {

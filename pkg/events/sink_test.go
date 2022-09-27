@@ -22,8 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	eventsapi "github.com/talos-systems/siderolink/api/events"
-	"github.com/talos-systems/siderolink/pkg/events"
+	eventsapi "github.com/siderolabs/siderolink/api/events"
+	"github.com/siderolabs/siderolink/pkg/events"
 )
 
 type state struct {
