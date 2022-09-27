@@ -48,6 +48,7 @@ func (s *Sink) Publish(ctx context.Context, e *events.EventRequest) (*events.Eve
 		&machine.ConfigLoadErrorEvent{},
 		&machine.ConfigValidationErrorEvent{},
 		&machine.AddressEvent{},
+		&machine.MachineStatusEvent{},
 	} {
 		if typeURL == "type.googleapis.com/"+string(eventType.ProtoReflect().Descriptor().FullName()) {
 			msg = eventType
