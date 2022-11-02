@@ -7,7 +7,6 @@ package events
 import (
 	"context"
 
-	"github.com/talos-systems/talos/pkg/machinery/api/machine"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
 
@@ -22,45 +21,38 @@ type Adapter interface {
 // Sink implements events.EventSinkServiceServer.
 type Sink struct {
 	events.UnimplementedEventSinkServiceServer
-	adapter Adapter
+	adapter         Adapter
+	supportedEvents map[string]proto.Message
 }
 
 // NewSink creates new events sink service.
-func NewSink(a Adapter) *Sink {
-	return &Sink{
-		adapter: a,
+func NewSink(a Adapter, supportedTypes []proto.Message) *Sink {
+	sink := &Sink{
+		adapter:         a,
+		supportedEvents: make(map[string]proto.Message),
 	}
+
+	for _, eventType := range supportedTypes {
+		sink.supportedEvents["type.googleapis.com/"+string(eventType.ProtoReflect().Descriptor().FullName())] = eventType
+	}
+
+	return sink
 }
 
 // Publish implements events.EventSinkServiceServer.
 func (s *Sink) Publish(ctx context.Context, e *events.EventRequest) (*events.EventResponse, error) {
 	var (
 		typeURL = e.Data.TypeUrl
-		msg     proto.Message
 		res     = &events.EventResponse{}
 	)
 
-	for _, eventType := range []proto.Message{
-		&machine.SequenceEvent{},
-		&machine.PhaseEvent{},
-		&machine.TaskEvent{},
-		&machine.ServiceStateEvent{},
-		&machine.ConfigLoadErrorEvent{},
-		&machine.ConfigValidationErrorEvent{},
-		&machine.AddressEvent{},
-		&machine.MachineStatusEvent{},
-	} {
-		if typeURL == "type.googleapis.com/"+string(eventType.ProtoReflect().Descriptor().FullName()) {
-			msg = eventType
-
-			break
-		}
-	}
-
+	msg := s.supportedEvents[typeURL]
 	if msg == nil {
 		// We haven't implemented the handling of this event yet.
 		return res, nil
 	}
+
+	msg = proto.Clone(msg)
 
 	if err := proto.Unmarshal(e.GetData().GetValue(), msg); err != nil {
 		return res, err

@@ -5,9 +5,8 @@
 package wireguard
 
 import (
+	"crypto/sha256"
 	"net/netip"
-
-	"github.com/talos-systems/talos/pkg/machinery/resources/network"
 )
 
 // NetworkPrefix returns IPv6 prefix for the SideroLink.
@@ -15,5 +14,19 @@ import (
 // Server is using the first address in the block.
 // Nodes are using random addresses from the /64 space.
 func NetworkPrefix(installationID string) netip.Prefix {
-	return network.ULAPrefix(installationID, network.ULASideroLink)
+	var prefixData [16]byte
+
+	hash := sha256.Sum256([]byte(installationID))
+
+	// Take the last 16 bytes of the clusterID's hash.
+	copy(prefixData[:], hash[sha256.Size-16:])
+
+	// Apply the ULA prefix as per RFC4193
+	prefixData[0] = 0xfd
+
+	// Apply the Talos-specific ULA Purpose suffix (SideroLink)
+	// We are not importing Talos machinery package here, as Talos imports SideroLink library, and this creates an import cycle.
+	prefixData[7] = 0x3
+
+	return netip.PrefixFrom(netip.AddrFrom16(prefixData), 64).Masked()
 }

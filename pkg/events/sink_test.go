@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/talos-systems/talos/pkg/machinery/api/machine"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -23,14 +22,14 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	eventsapi "github.com/siderolabs/siderolink/api/events"
+	pb "github.com/siderolabs/siderolink/api/siderolink"
 	"github.com/siderolabs/siderolink/pkg/events"
 )
 
 type state struct {
-	ConfigLoadError       error
-	ConfigValidationError error
-	Hostname              string
-	Addresses             []string
+	NodeUUIDs       []string
+	ServerAddresses []string
+	ServerEndpoints []string
 
 	version int
 	stateMu sync.Mutex
@@ -46,13 +45,16 @@ func (s *state) HandleEvent(ctx context.Context, e events.Event) error {
 	}
 
 	switch msg := e.Payload.(type) {
-	case *machine.AddressEvent:
-		s.Addresses = msg.Addresses
-		s.Hostname = msg.Hostname
-	case *machine.ConfigValidationErrorEvent:
-		s.ConfigValidationError = fmt.Errorf(msg.Error)
-	case *machine.ConfigLoadErrorEvent:
-		s.ConfigLoadError = fmt.Errorf(msg.Error)
+	case *pb.ProvisionRequest:
+		s.NodeUUIDs = append(s.NodeUUIDs, msg.NodeUuid)
+	case *pb.ProvisionResponse:
+		if msg.ServerEndpoint != "" {
+			s.ServerEndpoints = append(s.ServerEndpoints, msg.ServerEndpoint)
+		}
+
+		if msg.ServerAddress != "" {
+			s.ServerAddresses = append(s.ServerAddresses, msg.ServerAddress)
+		}
 	}
 
 	s.version++
@@ -79,7 +81,11 @@ func (suite *SinkSuite) SetupSuite() {
 
 	suite.state = &state{}
 
-	suite.sink = events.NewSink(suite.state)
+	// we need any protobuf messages for tests, so use siderolink API as a mock
+	suite.sink = events.NewSink(suite.state, []proto.Message{
+		&pb.ProvisionRequest{},
+		&pb.ProvisionResponse{},
+	})
 
 	suite.lis = lis
 
@@ -112,20 +118,15 @@ func (suite *SinkSuite) TestPublish() {
 
 	suite.Require().NoError(err)
 
-	hostname := "localhost"
-	addrs := []string{"127.0.0.2", "172.24.0.2"}
-	eventErr := "it failed"
-
 	events := []proto.Message{
-		&machine.AddressEvent{
-			Hostname:  hostname,
-			Addresses: addrs,
+		&pb.ProvisionRequest{
+			NodeUuid: "1234",
 		},
-		&machine.ConfigLoadErrorEvent{
-			Error: eventErr,
+		&pb.ProvisionResponse{
+			ServerAddress: "foo",
 		},
-		&machine.ConfigValidationErrorEvent{
-			Error: eventErr,
+		&pb.ProvisionResponse{
+			ServerEndpoint: "bar:123",
 		},
 	}
 
@@ -156,10 +157,9 @@ func (suite *SinkSuite) TestPublish() {
 	suite.state.stateMu.Lock()
 	defer suite.state.stateMu.Unlock()
 
-	suite.Require().Equal(hostname, suite.state.Hostname)
-	suite.Require().Equal(addrs, suite.state.Addresses)
-	suite.Require().EqualError(suite.state.ConfigValidationError, eventErr)
-	suite.Require().EqualError(suite.state.ConfigLoadError, eventErr)
+	suite.Require().Equal([]string{"1234"}, suite.state.NodeUUIDs)
+	suite.Require().Equal([]string{"foo"}, suite.state.ServerAddresses)
+	suite.Require().Equal([]string{"bar:123"}, suite.state.ServerEndpoints)
 }
 
 func TestSinkSuite(t *testing.T) {

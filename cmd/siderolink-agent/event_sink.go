@@ -52,7 +52,7 @@ func eventSink(ctx context.Context, eg *errgroup.Group) error {
 		return nil
 	})
 
-	sink := events.NewSink(&adapter{})
+	sink := events.NewSink(&adapter{}, nil)
 	eventsapi.RegisterEventSinkServiceServer(server, sink)
 
 	eg.Go(func() error {
