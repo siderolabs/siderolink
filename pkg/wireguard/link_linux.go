@@ -32,6 +32,7 @@ func createWireguardDevice(name string) (string, error) {
 			Info: &rtnetlink.LinkInfo{
 				Kind: linkKindWireguard,
 			},
+			MTU: LinkMTU,
 		},
 	})
 	if err != nil && !errors.Is(err, fs.ErrExist) {

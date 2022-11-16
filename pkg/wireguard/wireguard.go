@@ -33,6 +33,16 @@ const (
 	// This interval is applied when the link is already established.
 	PeerDownInterval = (180 + 5 + 90) * time.Second
 
+	// LinkMTU is the suggested MTU of the link for Wireguard.
+	//
+	// Wireguard sets DF (Don't Fragment) bit on all packets, so the MTU of the link
+	// should be so that with the overhead of the Wireguard header, the packet
+	// is still smaller than the MTU of the link.
+	//
+	// To be on the safe side, we set the MTU to 1280, which is the minimum MTU
+	// for IPv6.
+	LinkMTU = 1280
+
 	linkKindWireguard = "wireguard"
 )
 
@@ -85,7 +95,7 @@ func NewDevice(address netip.Prefix, privateKey wgtypes.Key, listenPort uint16,
 
 	logger.Sugar().Info("attempting to configure tun device (userspace)")
 
-	dev.tun, err = tun.CreateTUN(interfaceName, device.DefaultMTU)
+	dev.tun, err = tun.CreateTUN(interfaceName, LinkMTU)
 	if err != nil {
 		return nil, fmt.Errorf("error creating tun device: %w", err)
 	}
