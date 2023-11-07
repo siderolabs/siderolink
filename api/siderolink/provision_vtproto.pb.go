@@ -32,6 +32,14 @@ func (m *ProvisionRequest) CloneVT() *ProvisionRequest {
 		tmpVal := *rhs
 		r.JoinToken = &tmpVal
 	}
+	if rhs := m.NodeUniqueToken; rhs != nil {
+		tmpVal := *rhs
+		r.NodeUniqueToken = &tmpVal
+	}
+	if rhs := m.TalosVersion; rhs != nil {
+		tmpVal := *rhs
+		r.TalosVersion = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -77,6 +85,12 @@ func (this *ProvisionRequest) EqualVT(that *ProvisionRequest) bool {
 		return false
 	}
 	if p, q := this.JoinToken, that.JoinToken; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
+		return false
+	}
+	if p, q := this.NodeUniqueToken, that.NodeUniqueToken; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
+		return false
+	}
+	if p, q := this.TalosVersion, that.TalosVersion; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -146,6 +160,20 @@ func (m *ProvisionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.TalosVersion != nil {
+		i -= len(*m.TalosVersion)
+		copy(dAtA[i:], *m.TalosVersion)
+		i = encodeVarint(dAtA, i, uint64(len(*m.TalosVersion)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if m.NodeUniqueToken != nil {
+		i -= len(*m.NodeUniqueToken)
+		copy(dAtA[i:], *m.NodeUniqueToken)
+		i = encodeVarint(dAtA, i, uint64(len(*m.NodeUniqueToken)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.JoinToken != nil {
 		i -= len(*m.JoinToken)
@@ -259,6 +287,14 @@ func (m *ProvisionRequest) SizeVT() (n int) {
 	}
 	if m.JoinToken != nil {
 		l = len(*m.JoinToken)
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.NodeUniqueToken != nil {
+		l = len(*m.NodeUniqueToken)
+		n += 1 + l + sov(uint64(l))
+	}
+	if m.TalosVersion != nil {
+		l = len(*m.TalosVersion)
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -422,6 +458,72 @@ func (m *ProvisionRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			s := string(dAtA[iNdEx:postIndex])
 			m.JoinToken = &s
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field NodeUniqueToken", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.NodeUniqueToken = &s
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TalosVersion", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			s := string(dAtA[iNdEx:postIndex])
+			m.TalosVersion = &s
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

@@ -56,8 +56,9 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 		NodePrefix:      nodePrefix,
 		ServerAddress:   serverAddr.Addr(),
 		ServerEndpoint:  wireguardEndpoint,
-		ServerPublicKey: privateKey.PublicKey(),
 		JoinToken:       sideroLinkFlags.joinToken,
+		ServerPublicKey: privateKey.PublicKey(),
+		Logger:          logger,
 	})
 
 	s := grpc.NewServer()

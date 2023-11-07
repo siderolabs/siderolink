@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/netip"
 
+	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,12 +30,15 @@ type Server struct {
 }
 
 // Config configures the server.
+//
+//nolint:govet
 type Config struct {
 	NodePrefix      netip.Prefix
 	ServerAddress   netip.Addr
 	ServerEndpoint  netip.AddrPort
 	JoinToken       string
 	ServerPublicKey wgtypes.Key
+	Logger          *zap.Logger
 }
 
 // NewServer initializes new server.
@@ -78,6 +82,13 @@ func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.P
 		PubKey:  pubKey,
 		Address: nodeAddress.Addr(),
 	}
+
+	srv.cfg.Logger.Debug(
+		"got new node",
+		zap.String("uuid", req.GetNodeUuid()),
+		zap.String("unique_token", req.GetNodeUniqueToken()),
+		zap.String("talos_version", req.GetTalosVersion()),
+	)
 
 	return &pb.ProvisionResponse{
 		ServerEndpoint:    srv.cfg.ServerEndpoint.String(),

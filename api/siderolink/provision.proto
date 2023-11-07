@@ -18,6 +18,11 @@ message ProvisionRequest {
     string node_public_key = 2;
     // Join token (as string) of the node.
     optional string join_token = 3;
+    // Unique token (as string) of the node. Needed in case node provided node_uuid with all zeroes.
+    // Or two and more nodes have the same node_uuid.
+    optional string node_unique_token = 4;
+    // Talos Version (as string) of the node.
+    optional string talos_version = 5;
 }
 
 message ProvisionResponse {
