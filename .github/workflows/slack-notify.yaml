@@ -1,0 +1,112 @@
+# THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
+#
+# Generated on 2023-11-07T12:21:22Z by kres latest.
+
+name: slack-notify
+"on":
+  workflow_run:
+    workflows:
+      - default
+    types:
+      - completed
+jobs:
+  slack-notify:
+    runs-on:
+      - self-hosted
+      - generic
+    if: github.event.workflow_run.conclusion != 'skipped'
+    steps:
+      - name: Download PR artifact
+        if: github.event.workflow_run.event == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |-
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id,
+            });
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+                return artifact.name == "pr-number"
+            })[0];
+            let download = await github.rest.actions.downloadArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: matchArtifact.id,
+                archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/pr-number.zip`, Buffer.from(download.data));
+      - name: Get PR number
+        id: get-pr-number
+        if: github.event.workflow_run.event == 'pull_request'
+        run: |
+          unzip pr-number.zip
+          echo pull_request_number=$(cat pr-number.txt) >> $GITHUB_OUTPUT
+      - name: Slack Notify
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: proj-talos-maintainers
+          payload: |
+            {
+                "attachments": [
+                    {
+                        "color": "${{ github.event.workflow_run.conclusion == 'success' && '#2EB886' || github.event.workflow_run.conclusion == 'failure' && '#A30002' || '#FFCC00' }}",
+                        "fallback": "test",
+                        "blocks": [
+                            {
+                                "type": "section",
+                                "fields": [
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": "${{ github.event.workflow_run.event == 'pull_request' && format('*Pull Request:* {0} (`{1}`)\n<{2}/pull/{3}|{4}>', github.repository, github.ref_name, github.event.repository.html_url, steps.get-pr-number.outputs.pull_request_number, github.event.workflow_run.display_title) || format('*Build:* {0} (`{1}`)\n<{2}/commit/{3}|{4}>', github.repository, github.ref_name, github.event.repository.html_url, github.sha, github.event.workflow_run.display_title) }}"
+                                    },
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": "*Status:*\n`${{ github.event.workflow_run.conclusion }}`"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "section",
+                                "fields": [
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": "*Author:*\n`${{ github.actor }}`"
+                                    },
+                                    {
+                                        "type": "mrkdwn",
+                                        "text": "*Event:*\n`${{ github.event.workflow_run.event }}`"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "divider"
+                            },
+                            {
+                                "type": "actions",
+                                "elements": [
+                                    {
+                                        "type": "button",
+                                        "text": {
+                                            "type": "plain_text",
+                                            "text": "Logs"
+                                        },
+                                        "url": "${{ github.event.workflow_run.html_url }}"
+                                    },
+                                    {
+                                        "type": "button",
+                                        "text": {
+                                            "type": "plain_text",
+                                            "text": "Commit"
+                                        },
+                                        "url": "${{ github.event.repository.html_url }}/commit/${{ github.sha }}"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

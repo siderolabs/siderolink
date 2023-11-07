@@ -51,7 +51,7 @@ func (srv *Server) EventCh() <-chan wireguard.PeerEvent {
 }
 
 // Provision the SideroLink.
-func (srv *Server) Provision(ctx context.Context, req *pb.ProvisionRequest) (*pb.ProvisionResponse, error) {
+func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.ProvisionResponse, error) {
 	if srv.cfg.JoinToken != "" && (req.JoinToken == nil || *req.JoinToken != srv.cfg.JoinToken) {
 		return nil, status.Error(codes.PermissionDenied, "invalid join token")
 	}
