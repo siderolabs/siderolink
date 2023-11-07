@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ type state struct {
 }
 
 // HandleEvent implements events.Adapter.
-func (s *state) HandleEvent(ctx context.Context, e events.Event) error {
+func (s *state) HandleEvent(_ context.Context, e events.Event) error {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
@@ -136,7 +137,7 @@ func (suite *SinkSuite) TestPublish() {
 
 		ev := &eventsapi.EventRequest{
 			Data: msg,
-			Id:   fmt.Sprintf("%d", i),
+			Id:   strconv.Itoa(i),
 		}
 
 		_, err = client.Publish(ctx, ev)

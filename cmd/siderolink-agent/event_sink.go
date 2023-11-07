@@ -26,7 +26,7 @@ var eventSinkFlags struct {
 type adapter struct{}
 
 // HandleEvent implements events.Adapter.
-func (s *adapter) HandleEvent(ctx context.Context, e events.Event) error {
+func (s *adapter) HandleEvent(_ context.Context, e events.Event) error {
 	data, err := yaml.Marshal(e.Payload)
 	if err != nil {
 		return err
