@@ -6,6 +6,7 @@ package wireguard
 
 import (
 	"net/netip"
+	"time"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -25,4 +26,6 @@ type PeerEvent struct {
 	Endpoint string
 
 	Address netip.Addr
+
+	PersistentKeepAliveInterval *time.Duration
 }

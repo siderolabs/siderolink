@@ -1,9 +1,10 @@
 module github.com/siderolabs/siderolink
 
-go 1.21.0
+go 1.21.4
 
 require (
 	github.com/jsimonetti/rtnetlink v1.3.5
+	github.com/siderolabs/go-pointer v1.0.0
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.26.0
 	go4.org/netipx v0.0.0-20230824141953-6213f710f925

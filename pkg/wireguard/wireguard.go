@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/siderolabs/go-pointer"
 	"go.uber.org/zap"
 	"go4.org/netipx"
 	"golang.zx2c4.com/wireguard/conn"
@@ -42,6 +43,9 @@ const (
 	// To be on the safe side, we set the MTU to 1280, which is the minimum MTU
 	// for IPv6.
 	LinkMTU = 1280
+
+	// RecommendedPersistentKeepAliveInterval is the recommended interval for persistent keepalive.
+	RecommendedPersistentKeepAliveInterval = 25 * time.Second
 
 	linkKindWireguard = "wireguard"
 )
@@ -245,7 +249,8 @@ func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logge
 			}
 
 			if prefix, ok := netipx.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
-				if prefix.Addr() == peerEvent.Address {
+				if prefix.Addr() == peerEvent.Address && // check address match & keepalive settings match
+					(peerEvent.PersistentKeepAliveInterval == nil || pointer.SafeDeref(peerEvent.PersistentKeepAliveInterval) == oldPeer.PersistentKeepaliveInterval) {
 					// skip the update
 					logger.Info("skipping peer update", zap.String("public_key", pubKey))
 
@@ -289,6 +294,7 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 		cfg.Peers[0].AllowedIPs = []net.IPNet{
 			*netipx.PrefixIPNet(netip.PrefixFrom(peerEvent.Address, peerEvent.Address.BitLen())),
 		}
+		cfg.Peers[0].PersistentKeepaliveInterval = peerEvent.PersistentKeepAliveInterval
 
 		if peerEvent.Endpoint != "" {
 			ip, err := netip.ParseAddrPort(peerEvent.Endpoint)

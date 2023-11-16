@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/netip"
 
+	"github.com/siderolabs/go-pointer"
 	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc/codes"
@@ -79,8 +80,9 @@ func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.P
 	}
 
 	srv.eventCh <- wireguard.PeerEvent{
-		PubKey:  pubKey,
-		Address: nodeAddress.Addr(),
+		PubKey:                      pubKey,
+		Address:                     nodeAddress.Addr(),
+		PersistentKeepAliveInterval: pointer.To(wireguard.RecommendedPersistentKeepAliveInterval),
 	}
 
 	srv.cfg.Logger.Debug(
