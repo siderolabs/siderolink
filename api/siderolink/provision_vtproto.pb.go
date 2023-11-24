@@ -56,10 +56,14 @@ func (m *ProvisionResponse) CloneVT() *ProvisionResponse {
 		return (*ProvisionResponse)(nil)
 	}
 	r := &ProvisionResponse{
-		ServerEndpoint:    m.ServerEndpoint,
 		ServerPublicKey:   m.ServerPublicKey,
 		NodeAddressPrefix: m.NodeAddressPrefix,
 		ServerAddress:     m.ServerAddress,
+	}
+	if rhs := m.ServerEndpoint; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.ServerEndpoint = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -109,8 +113,14 @@ func (this *ProvisionResponse) EqualVT(that *ProvisionResponse) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.ServerEndpoint != that.ServerEndpoint {
+	if len(this.ServerEndpoint) != len(that.ServerEndpoint) {
 		return false
+	}
+	for i, vx := range this.ServerEndpoint {
+		vy := that.ServerEndpoint[i]
+		if vx != vy {
+			return false
+		}
 	}
 	if this.ServerPublicKey != that.ServerPublicKey {
 		return false
@@ -251,11 +261,13 @@ func (m *ProvisionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 	}
 	if len(m.ServerEndpoint) > 0 {
-		i -= len(m.ServerEndpoint)
-		copy(dAtA[i:], m.ServerEndpoint)
-		i = encodeVarint(dAtA, i, uint64(len(m.ServerEndpoint)))
-		i--
-		dAtA[i] = 0xa
+		for iNdEx := len(m.ServerEndpoint) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ServerEndpoint[iNdEx])
+			copy(dAtA[i:], m.ServerEndpoint[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.ServerEndpoint[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
 	}
 	return len(dAtA) - i, nil
 }
@@ -307,9 +319,11 @@ func (m *ProvisionResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.ServerEndpoint)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if len(m.ServerEndpoint) > 0 {
+		for _, s := range m.ServerEndpoint {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	l = len(m.ServerPublicKey)
 	if l > 0 {
@@ -606,7 +620,7 @@ func (m *ProvisionResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.ServerEndpoint = string(dAtA[iNdEx:postIndex])
+			m.ServerEndpoint = append(m.ServerEndpoint, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {

@@ -93,7 +93,7 @@ func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.P
 	)
 
 	return &pb.ProvisionResponse{
-		ServerEndpoint:    srv.cfg.ServerEndpoint.String(),
+		ServerEndpoint:    pb.MakeEndpoints(srv.cfg.ServerEndpoint.String()),
 		ServerPublicKey:   srv.cfg.ServerPublicKey.String(),
 		ServerAddress:     srv.cfg.ServerAddress.String(),
 		NodeAddressPrefix: nodeAddress.String(),

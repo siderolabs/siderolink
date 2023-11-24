@@ -27,7 +27,7 @@ message ProvisionRequest {
 
 message ProvisionResponse {
     // Server Wireguard endpoint IP and port.
-    string server_endpoint = 1;
+    repeated string server_endpoint = 1;
     // Server public Wireguard key encoded as string.
     string server_public_key = 3;
     // Node address with prefix on the Wireguard tunnel.

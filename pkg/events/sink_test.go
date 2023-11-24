@@ -49,8 +49,8 @@ func (s *state) HandleEvent(_ context.Context, e events.Event) error {
 	case *pb.ProvisionRequest:
 		s.NodeUUIDs = append(s.NodeUUIDs, msg.NodeUuid)
 	case *pb.ProvisionResponse:
-		if msg.ServerEndpoint != "" {
-			s.ServerEndpoints = append(s.ServerEndpoints, msg.ServerEndpoint)
+		if ep := msg.GetEndpoints(); ep != nil {
+			s.ServerEndpoints = append(s.ServerEndpoints, ep...)
 		}
 
 		if msg.ServerAddress != "" {
@@ -127,7 +127,7 @@ func (suite *SinkSuite) TestPublish() {
 			ServerAddress: "foo",
 		},
 		&pb.ProvisionResponse{
-			ServerEndpoint: "bar:123",
+			ServerEndpoint: []string{"bar:123"},
 		},
 	}
 
