@@ -70,5 +70,6 @@ func (s *Sink) Publish(ctx context.Context, e *events.EventRequest) (*events.Eve
 		TypeURL: typeURL,
 		ID:      e.Id,
 		Payload: msg,
+		ActorID: e.ActorId,
 	})
 }

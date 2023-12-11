@@ -13,4 +13,5 @@ type Event struct {
 	TypeURL string
 	ID      string
 	Node    string
+	ActorID string
 }

@@ -9,6 +9,7 @@ import "google/protobuf/any.proto";
 message EventRequest {
   google.protobuf.Any data = 1;
   string id = 2;
+  string actor_id = 3;
 }
 
 message EventResponse {}

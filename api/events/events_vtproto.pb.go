@@ -26,7 +26,8 @@ func (m *EventRequest) CloneVT() *EventRequest {
 		return (*EventRequest)(nil)
 	}
 	r := &EventRequest{
-		Id: m.Id,
+		Id:      m.Id,
+		ActorId: m.ActorId,
 	}
 	if rhs := m.Data; rhs != nil {
 		if vtpb, ok := interface{}(rhs).(interface{ CloneVT() *anypb.Any }); ok {
@@ -76,6 +77,9 @@ func (this *EventRequest) EqualVT(that *EventRequest) bool {
 		return false
 	}
 	if this.Id != that.Id {
+		return false
+	}
+	if this.ActorId != that.ActorId {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -133,6 +137,13 @@ func (m *EventRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.ActorId) > 0 {
+		i -= len(m.ActorId)
+		copy(dAtA[i:], m.ActorId)
+		i = encodeVarint(dAtA, i, uint64(len(m.ActorId)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if len(m.Id) > 0 {
 		i -= len(m.Id)
@@ -227,6 +238,10 @@ func (m *EventRequest) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	l = len(m.Id)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.ActorId)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -354,6 +369,38 @@ func (m *EventRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Id = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActorId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ActorId = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
