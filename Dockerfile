@@ -2,7 +2,7 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2024-03-07T11:10:45Z by kres latest.
+# Generated on 2024-03-10T14:36:55Z by kres latest.
 
 ARG TOOLCHAIN
 
@@ -19,6 +19,7 @@ RUN markdownlint --ignore "CHANGELOG.md" --ignore "**/node_modules/**" --ignore 
 FROM scratch AS proto-specs
 ADD api/events/events.proto /api/events/
 ADD api/siderolink/provision.proto /api/siderolink/
+ADD api/siderolink/wireguard.proto /api/siderolink/
 
 # base toolchain image
 FROM ${TOOLCHAIN} AS toolchain
@@ -78,9 +79,10 @@ RUN --mount=type=cache,target=/go/pkg go list -mod=readonly all >/dev/null
 # runs protobuf compiler
 FROM tools AS proto-compile
 COPY --from=proto-specs / /
-RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size+equal+clone /api/events/events.proto /api/siderolink/provision.proto
+RUN protoc -I/api --go_out=paths=source_relative:/api --go-grpc_out=paths=source_relative:/api --go-vtproto_out=paths=source_relative:/api --go-vtproto_opt=features=marshal+unmarshal+size+equal+clone /api/events/events.proto /api/siderolink/provision.proto /api/siderolink/wireguard.proto
 RUN rm /api/events/events.proto
 RUN rm /api/siderolink/provision.proto
+RUN rm /api/siderolink/wireguard.proto
 RUN goimports -w -local github.com/siderolabs/siderolink /api
 RUN gofumpt -w /api
 

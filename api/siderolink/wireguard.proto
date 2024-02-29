@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package sidero.link;
+
+option go_package = "github.com/siderolabs/siderolink/api/siderolink/pb";
+
+// WireGuardOverGRPCService provides a service for sending and receiving WireGuard packets over gRPC.
+service WireGuardOverGRPCService {
+  // CreateStream creates a new stream for sending and receiving WireGuard packets.
+  // It should contain 'x-siderolink-ipv6-addr' metadata with the virtual IPv6 address of the peer, which
+  // was provided by the server when the peer was added.
+  rpc CreateStream(stream PeerPacket) returns (stream PeerPacket);
+}
+
+// PeerPacket is a packet sent between "server" and client.
+message PeerPacket {
+  bytes Data = 2;
+}

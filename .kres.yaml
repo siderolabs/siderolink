@@ -7,6 +7,8 @@ spec:
       subdirectory: events/
     - source: api/siderolink/provision.proto
       subdirectory: siderolink/
+    - source: api/siderolink/wireguard.proto
+      subdirectory: siderolink/
 ---
 kind: auto.CommandConfig
 name: siderolink-agent

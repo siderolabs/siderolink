@@ -30,7 +30,7 @@ func main() {
 	defer cancel()
 
 	if err := run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s", err)
+		fmt.Fprintln(os.Stderr, "error: ", err)
 	}
 }
 

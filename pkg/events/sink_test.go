@@ -145,7 +145,7 @@ func (suite *SinkSuite) TestPublish() {
 		suite.Require().NoError(err)
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		suite.state.stateMu.Lock()
 		if suite.state.version == 2 {
 			break

@@ -28,4 +28,6 @@ type PeerEvent struct {
 	Address netip.Addr
 
 	PersistentKeepAliveInterval *time.Duration
+
+	VirtualAddr netip.Addr
 }

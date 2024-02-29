@@ -14,6 +14,16 @@ import (
 // Server is using the first address in the block.
 // Nodes are using random addresses from the /64 space.
 func NetworkPrefix(installationID string) netip.Prefix {
+	return networkPrefix(installationID, 0x3)
+}
+
+// VirtualNetworkPrefix returns IPv6 prefix for the SideroLink over GRPC.
+// Virtual nodes will use random addresses from the /64 space.
+func VirtualNetworkPrefix() netip.Prefix {
+	return networkPrefix("", 0x4)
+}
+
+func networkPrefix(installationID string, suffix byte) netip.Prefix {
 	var prefixData [16]byte
 
 	hash := sha256.Sum256([]byte(installationID))
@@ -26,7 +36,7 @@ func NetworkPrefix(installationID string) netip.Prefix {
 
 	// Apply the Talos-specific ULA Purpose suffix (SideroLink)
 	// We are not importing Talos machinery package here, as Talos imports SideroLink library, and this creates an import cycle.
-	prefixData[7] = 0x3
+	prefixData[7] = suffix
 
 	return netip.PrefixFrom(netip.AddrFrom16(prefixData), 64).Masked()
 }

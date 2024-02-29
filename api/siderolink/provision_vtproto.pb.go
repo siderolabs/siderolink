@@ -39,6 +39,10 @@ func (m *ProvisionRequest) CloneVT() *ProvisionRequest {
 		tmpVal := *rhs
 		r.TalosVersion = &tmpVal
 	}
+	if rhs := m.WireguardOverGrpc; rhs != nil {
+		tmpVal := *rhs
+		r.WireguardOverGrpc = &tmpVal
+	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -58,6 +62,7 @@ func (m *ProvisionResponse) CloneVT() *ProvisionResponse {
 	r.ServerPublicKey = m.ServerPublicKey
 	r.NodeAddressPrefix = m.NodeAddressPrefix
 	r.ServerAddress = m.ServerAddress
+	r.GrpcPeerAddrPort = m.GrpcPeerAddrPort
 	if rhs := m.ServerEndpoint; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -95,6 +100,9 @@ func (this *ProvisionRequest) EqualVT(that *ProvisionRequest) bool {
 	if p, q := this.TalosVersion, that.TalosVersion; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
 		return false
 	}
+	if p, q := this.WireguardOverGrpc, that.WireguardOverGrpc; (p == nil && q != nil) || (p != nil && (q == nil || *p != *q)) {
+		return false
+	}
 	return string(this.unknownFields) == string(that.unknownFields)
 }
 
@@ -127,6 +135,9 @@ func (this *ProvisionResponse) EqualVT(that *ProvisionResponse) bool {
 		return false
 	}
 	if this.ServerAddress != that.ServerAddress {
+		return false
+	}
+	if this.GrpcPeerAddrPort != that.GrpcPeerAddrPort {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -168,6 +179,16 @@ func (m *ProvisionRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.WireguardOverGrpc != nil {
+		i--
+		if *m.WireguardOverGrpc {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.TalosVersion != nil {
 		i -= len(*m.TalosVersion)
@@ -237,6 +258,13 @@ func (m *ProvisionResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.GrpcPeerAddrPort) > 0 {
+		i -= len(m.GrpcPeerAddrPort)
+		copy(dAtA[i:], m.GrpcPeerAddrPort)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.GrpcPeerAddrPort)))
+		i--
+		dAtA[i] = 0x32
+	}
 	if len(m.ServerAddress) > 0 {
 		i -= len(m.ServerAddress)
 		copy(dAtA[i:], m.ServerAddress)
@@ -296,6 +324,9 @@ func (m *ProvisionRequest) SizeVT() (n int) {
 		l = len(*m.TalosVersion)
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.WireguardOverGrpc != nil {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -321,6 +352,10 @@ func (m *ProvisionResponse) SizeVT() (n int) {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.ServerAddress)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.GrpcPeerAddrPort)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -520,6 +555,27 @@ func (m *ProvisionRequest) UnmarshalVT(dAtA []byte) error {
 			s := string(dAtA[iNdEx:postIndex])
 			m.TalosVersion = &s
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WireguardOverGrpc", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			b := bool(v != 0)
+			m.WireguardOverGrpc = &b
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -698,6 +754,38 @@ func (m *ProvisionResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.ServerAddress = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GrpcPeerAddrPort", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GrpcPeerAddrPort = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
