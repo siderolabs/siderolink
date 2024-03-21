@@ -89,7 +89,7 @@ type DeviceConfig struct {
 
 // PeerHandler is an interface for handling peer events.
 type PeerHandler interface {
-	HandlePeerAdded(pubKey wgtypes.Key, virtualIP netip.Addr) error
+	HandlePeerAdded(event PeerEvent) error
 	HandlePeerRemoved(pubKey wgtypes.Key) error
 }
 
@@ -170,17 +170,19 @@ func SetupIPToInterface(address netip.Prefix, ifaceName string) (func() error, e
 func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) error {
 	var tunDevice *device.Device
 
-	errs := make(chan error)
+	errs := make(chan error, 1)
 
 	// configure tun device
 	if dev.tun != nil {
-		// link spec resource for wireguard created by talos
-		uapi, err := UAPIOpen(dev.ifaceName)
-		if err != nil {
-			return fmt.Errorf("error listening on uapi socket: %w", err)
-		}
+		var wg sync.WaitGroup
 
-		defer uapi.Close() //nolint:errcheck
+		defer func() {
+			// Both [ipc.UAPIOpen] and [device.Device] do not wait for their goroutines to finish properly,
+			// so this is our best effort attempt to wait for them to finish.
+			time.Sleep(100 * time.Millisecond)
+
+			wg.Wait()
+		}()
 
 		bnd := dev.dc.Bind
 		if bnd == nil {
@@ -190,7 +192,23 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 		tunDevice = device.NewDevice(dev.tun, bnd, DeviceLogger(logger))
 		defer tunDevice.Close()
 
+		// link spec resource for wireguard created by talos
+		uapi, err := UAPIOpen(dev.ifaceName)
+		if err != nil {
+			return fmt.Errorf("error listening on uapi socket: %w", err)
+		}
+
+		defer func() {
+			if err := uapi.Close(); err != nil {
+				fmt.Println("error closing uapi socket: %w", err)
+			}
+		}()
+
+		wg.Add(1)
+
 		go func() {
+			defer wg.Done()
+
 			for {
 				c, e := uapi.Accept()
 				if e != nil {
@@ -199,7 +217,13 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 					return
 				}
 
-				go tunDevice.IpcHandle(c)
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+
+					tunDevice.IpcHandle(c)
+				}()
 			}
 		}()
 	}
@@ -331,13 +355,11 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvent PeerEvent) erro
 	defer dev.clientMu.Unlock()
 
 	if handler := dev.dc.PeerHandler; handler != nil {
-		if peerEvent.VirtualAddr.IsValid() {
-			if err := handler.HandlePeerAdded(peerEvent.PubKey, peerEvent.VirtualAddr); err != nil {
+		if !peerEvent.Remove {
+			if err := handler.HandlePeerAdded(peerEvent); err != nil {
 				return fmt.Errorf("error handling peer added event: %w", err)
 			}
-		}
-
-		if peerEvent.Remove {
+		} else {
 			if err := handler.HandlePeerRemoved(peerEvent.PubKey); err != nil {
 				return fmt.Errorf("error handling peer removed event: %w", err)
 			}

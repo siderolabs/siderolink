@@ -2,13 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package main
+package agent
 
 import (
 	"context"
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -24,15 +26,23 @@ import (
 	"github.com/siderolabs/siderolink/pkg/wireguard"
 )
 
-var sideroLinkFlags struct {
+//nolint:govet
+type sideroLinkConfig struct {
 	wireguardEndpoint string
 	apiEndpoint       string
 	joinToken         string
 	forceUserspace    bool
+	predefinedPairs   []bindUUIDtoIPv6
 }
 
-func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
-	lis, err := net.Listen("tcp", sideroLinkFlags.apiEndpoint)
+//nolint:govet
+type bindUUIDtoIPv6 struct {
+	UUID string
+	IPv6 netip.Addr
+}
+
+func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, peerHandler wireguard.PeerHandler, logger *zap.Logger) error {
+	lis, err := net.Listen("tcp", cfg.apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC API: %w", err)
 	}
@@ -47,7 +57,12 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 	nodePrefix := wireguard.NetworkPrefix("")
 	serverPrefix := netip.PrefixFrom(nodePrefix.Addr().Next(), nodePrefix.Bits())
 
-	wireguardEndpoint, err := netip.ParseAddrPort(sideroLinkFlags.wireguardEndpoint)
+	provider, err := newProvider(nodePrefix, cfg.predefinedPairs, logger)
+	if err != nil {
+		return err
+	}
+
+	wireguardEndpoint, err := netip.ParseAddrPort(cfg.wireguardEndpoint)
 	if err != nil {
 		return fmt.Errorf("invalid Wireguard endpoint: %w", err)
 	}
@@ -59,6 +74,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 	allowedPeers := wggrpc.NewAllowedPeers()
 
 	p := &peerProvider{
+		wrapped:      peerHandler,
 		allowedPeers: allowedPeers,
 	}
 
@@ -67,6 +83,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 			PrivateKey:             privateKey,
 			ServerPrefix:           serverPrefix,
 			ListenPort:             wireguardEndpoint.Port(),
+			ForceUserspace:         cfg.forceUserspace,
 			Bind:                   wgbind.NewServerBind(conn.NewDefaultBind(), grpcEndpointsPrefix, pt, logger),
 			AutoPeerRemoveInterval: 10 * time.Second,
 			PeerHandler:            p,
@@ -78,11 +95,11 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 	}
 
 	srv := server.NewServer(server.Config{
-		NodePrefix:      nodePrefix,
+		NodeProvisioner: provider,
 		ServerAddress:   serverPrefix.Addr(),
 		ServerEndpoint:  wireguardEndpoint,
 		VirtualPrefix:   grpcEndpointsPrefix,
-		JoinToken:       sideroLinkFlags.joinToken,
+		JoinToken:       cfg.joinToken,
 		ServerPublicKey: privateKey.PublicKey(),
 		Logger:          logger,
 	})
@@ -97,33 +114,88 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) err
 		return wgDevice.Run(ctx, logger, srv)
 	})
 
+	stopServer := sync.OnceFunc(s.Stop)
+
 	eg.Go(func() error {
+		defer stopServer()
+
 		return s.Serve(lis)
 	})
 
-	eg.Go(func() error {
-		<-ctx.Done()
-
-		s.Stop()
-
-		return nil
-	})
+	context.AfterFunc(ctx, stopServer)
 
 	return nil
 }
 
 type peerProvider struct {
 	allowedPeers *wggrpc.AllowedPeers
+	wrapped      wireguard.PeerHandler
 }
 
-func (p *peerProvider) HandlePeerAdded(pubKey wgtypes.Key, virtualIP netip.Addr) error {
-	p.allowedPeers.AddToken(pubKey, virtualIP.String())
+func (p *peerProvider) HandlePeerAdded(event wireguard.PeerEvent) error {
+	if event.VirtualAddr.IsValid() {
+		p.allowedPeers.AddToken(event.PubKey, event.VirtualAddr.String())
+	}
 
-	return nil
+	if p.wrapped == nil {
+		return nil
+	}
+
+	return p.wrapped.HandlePeerAdded(event)
 }
 
 func (p *peerProvider) HandlePeerRemoved(pubKey wgtypes.Key) error {
 	p.allowedPeers.RemoveToken(pubKey)
 
-	return nil
+	if p.wrapped == nil {
+		return nil
+	}
+
+	return p.wrapped.HandlePeerRemoved(pubKey)
+}
+
+func newProvider(prefix netip.Prefix, pairs []bindUUIDtoIPv6, logger *zap.Logger) (*uuidIPv6Provider, error) {
+	for i, p := range pairs {
+		switch {
+		case p.UUID == "":
+			return nil, fmt.Errorf("empty UUID for pair at index %d", i)
+
+		case !p.IPv6.IsValid():
+			return nil, fmt.Errorf("invalid IPv6 address for UUID %s at index %d", p.UUID, i)
+
+		case !p.IPv6.Is6():
+			return nil, fmt.Errorf("IPv6 address %q is not an IPv6 address", p.IPv6)
+
+		case !prefix.Contains(p.IPv6):
+			return nil, fmt.Errorf("IPv6 address %q is not in the prefix %q", p.IPv6, prefix)
+		}
+
+		logger.Info("set predefined UUID=IPv6 pair", zap.String("uuid", p.UUID), zap.Stringer("ipv6", p.IPv6))
+	}
+
+	return &uuidIPv6Provider{prefix: prefix, pairs: pairs, logger: logger}, nil
+}
+
+//nolint:govet
+type uuidIPv6Provider struct {
+	prefix netip.Prefix
+	pairs  []bindUUIDtoIPv6
+	logger *zap.Logger
+}
+
+func (u *uuidIPv6Provider) NodePrefix(nodeUUID string, _ string) (netip.Prefix, error) {
+	if idx := slices.IndexFunc(u.pairs, func(pair bindUUIDtoIPv6) bool { return pair.UUID == nodeUUID }); idx != -1 {
+		u.logger.Info("found predefined IPv6 for UUID", zap.String("uuid", nodeUUID), zap.Stringer("ipv6", u.pairs[idx].IPv6))
+
+		result := netip.PrefixFrom(u.pairs[idx].IPv6, u.prefix.Bits())
+
+		return result, nil
+	}
+
+	addr, err := wireguard.GenerateRandomNodeAddr(u.prefix)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+
+	return addr, nil
 }

@@ -2,61 +2,65 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// Package main provides the entrypoint for the SideroLink agent.
 package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
+
+	"github.com/siderolabs/siderolink/pkg/agent"
 )
 
 func main() {
-	flag.StringVar(&sideroLinkFlags.wireguardEndpoint, "sidero-link-wireguard-endpoint", "172.20.0.1:51821", "advertised Wireguard endpoint")
-	flag.StringVar(&sideroLinkFlags.apiEndpoint, "sidero-link-api-endpoint", ":4000", "gRPC API endpoint for the SideroLink")
-	flag.StringVar(&sideroLinkFlags.joinToken, "sidero-link-join-token", "", "join token")
-	flag.BoolVar(&sideroLinkFlags.forceUserspace, "sidero-link-force-userspace", false, "force usage of userspace UDP device for Wireguard")
-	flag.StringVar(&eventSinkFlags.apiEndpoint, "event-sink-endpoint", ":8080", "gRPC API endpoint for the Event Sink")
-	flag.StringVar(&logReceiverFlags.endpoint, "log-receiver-endpoint", ":4001", "TCP log receiver endpoint")
+	if err := run(); err != nil {
+		println("error :", err.Error())
+
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	var cfg agent.Config
+
+	var predefinedPairs predefinedPairsFlag
+
+	flag.StringVar(&cfg.WireguardEndpoint, "sidero-link-wireguard-endpoint", "172.20.0.1:51821", "advertised Wireguard endpoint")
+	flag.StringVar(&cfg.APIEndpoint, "sidero-link-api-endpoint", ":4000", "gRPC API endpoint for the SideroLink")
+	flag.StringVar(&cfg.JoinToken, "sidero-link-join-token", "", "join token")
+	flag.BoolVar(&cfg.ForceUserspace, "sidero-link-force-userspace", false, "force usage of userspace UDP device for Wireguard")
+	flag.StringVar(&cfg.SinkEndpoint, "event-sink-endpoint", ":8080", "gRPC API endpoint for the Event Sink")
+	flag.StringVar(&cfg.LogEndpoint, "log-receiver-endpoint", ":4001", "TCP log receiver endpoint")
+	flag.Var(&predefinedPairs, "predefined-pairs", "predefined pairs of UUID=IPv6 addrs for the nodes")
 	flag.Parse()
+
+	cfg.UUIDIPv6Pairs = predefinedPairs
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		return fmt.Errorf("error creating logger: %w", err)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	if err := run(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "error: ", err)
-	}
+	return agent.Run(ctx, cfg, nil, logger)
 }
 
-func run(ctx context.Context) error {
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		return fmt.Errorf("error creating logger")
-	}
+type predefinedPairsFlag []string
 
-	eg, ctx := errgroup.WithContext(ctx)
+func (p *predefinedPairsFlag) String() string {
+	return strings.Join(*p, " ")
+}
 
-	if err := sideroLink(ctx, eg, logger); err != nil {
-		return fmt.Errorf("SideroLink: %w", err)
-	}
-
-	if err := eventSink(ctx, eg); err != nil {
-		return fmt.Errorf("event sink: %w", err)
-	}
-
-	if err := logReceiver(ctx, eg, logger); err != nil {
-		return fmt.Errorf("log receiver: %w", err)
-	}
-
-	if err := eg.Wait(); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-		return err
-	}
+func (p *predefinedPairsFlag) Set(s string) error {
+	*p = append(*p, s)
 
 	return nil
 }

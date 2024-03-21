@@ -2,12 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package main
+package agent
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -15,38 +18,35 @@ import (
 	"github.com/siderolabs/siderolink/pkg/logreceiver"
 )
 
-var logReceiverFlags struct {
-	endpoint string
-}
-
 func logHandler(logger *zap.Logger) logreceiver.Handler {
 	return func(srcAddress netip.Addr, msg map[string]interface{}) {
 		logger.Info("kernel log message", zap.Stringer("src_address", srcAddress), zap.Any("msg", msg))
 	}
 }
 
-func logReceiver(ctx context.Context, eg *errgroup.Group, logger *zap.Logger) error {
-	lis, err := net.Listen("tcp", logReceiverFlags.endpoint)
+func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logger *zap.Logger) error {
+	lis, err := net.Listen("tcp", endpoint)
 	if err != nil {
-		return err
+		return fmt.Errorf("error listening for TCP log receiver: %w", err)
 	}
 
-	srv, err := logreceiver.NewServer(logger, lis, logHandler(logger))
-	if err != nil {
-		return err
-	}
+	srv := logreceiver.NewServer(logger, lis, logHandler(logger))
+
+	stopServer := sync.OnceFunc(srv.Stop)
 
 	eg.Go(func() error {
-		return srv.Serve()
+		defer stopServer()
+
+		serveErr := srv.Serve()
+
+		if errors.Is(serveErr, net.ErrClosed) && ctx.Err() != nil {
+			return nil //nolint:nilerr
+		}
+
+		return serveErr
 	})
 
-	eg.Go(func() error {
-		<-ctx.Done()
-
-		srv.Stop()
-
-		return nil
-	})
+	context.AfterFunc(ctx, stopServer)
 
 	return nil
 }

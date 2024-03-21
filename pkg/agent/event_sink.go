@@ -2,14 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// Package main ...
-package main
+package agent
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"strings"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -18,10 +19,6 @@ import (
 	eventsapi "github.com/siderolabs/siderolink/api/events"
 	"github.com/siderolabs/siderolink/pkg/events"
 )
-
-var eventSinkFlags struct {
-	apiEndpoint string
-}
 
 type adapter struct{}
 
@@ -37,27 +34,26 @@ func (s *adapter) HandleEvent(_ context.Context, e events.Event) error {
 	return nil
 }
 
-func eventSink(ctx context.Context, eg *errgroup.Group) error {
-	listen, err := net.Listen("tcp", eventSinkFlags.apiEndpoint)
+func eventSink(ctx context.Context, apiEndpoint string, eg *errgroup.Group) error {
+	listen, err := net.Listen("tcp", apiEndpoint)
 	if err != nil {
-		return err
+		return fmt.Errorf("error listening for gRPC eventsink API: %w", err)
 	}
 
 	server := grpc.NewServer()
 
-	eg.Go(func() error {
-		<-ctx.Done()
-		server.Stop()
-
-		return nil
-	})
-
 	sink := events.NewSink(&adapter{}, nil)
 	eventsapi.RegisterEventSinkServiceServer(server, sink)
 
+	stopServer := sync.OnceFunc(server.Stop)
+
 	eg.Go(func() error {
+		defer stopServer()
+
 		return server.Serve(listen)
 	})
+
+	context.AfterFunc(ctx, stopServer)
 
 	return nil
 }

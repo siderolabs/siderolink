@@ -28,12 +28,12 @@ type Server struct {
 type Handler func(srcAddress netip.Addr, msg map[string]interface{})
 
 // NewServer initializes new Server.
-func NewServer(logger *zap.Logger, listener net.Listener, handler Handler) (*Server, error) {
+func NewServer(logger *zap.Logger, listener net.Listener, handler Handler) *Server {
 	return &Server{
 		listener: listener,
 		logger:   logger,
 		handler:  handler,
-	}, nil
+	}
 }
 
 // Serve runs the TCP server loop.

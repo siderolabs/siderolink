@@ -7,9 +7,7 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"io"
 	"net"
 	"net/netip"
 
@@ -31,11 +29,16 @@ type Server struct {
 	cfg     Config
 }
 
+// NodeProvisioner is an interface that provides the node ip and prefix.
+type NodeProvisioner interface {
+	NodePrefix(nodeUUID string, talosVersion string) (netip.Prefix, error)
+}
+
 // Config configures the server.
 //
 //nolint:govet
 type Config struct {
-	NodePrefix      netip.Prefix
+	NodeProvisioner NodeProvisioner
 	ServerAddress   netip.Addr
 	ServerEndpoint  netip.AddrPort
 	VirtualPrefix   netip.Prefix
@@ -59,25 +62,25 @@ func (srv *Server) EventCh() <-chan wireguard.PeerEvent {
 
 // Provision the SideroLink.
 func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.ProvisionResponse, error) {
-	if srv.cfg.JoinToken != "" && (req.JoinToken == nil || *req.JoinToken != srv.cfg.JoinToken) {
+	if srv.cfg.JoinToken != "" && req.GetJoinToken() != srv.cfg.JoinToken {
 		return nil, status.Error(codes.PermissionDenied, "invalid join token")
 	}
 
 	// generated random address for the node
-	nodeAddress, err := generateRandomNodeAddr(srv.cfg.NodePrefix)
+	nodeAddress, err := srv.cfg.NodeProvisioner.NodePrefix(req.GetNodeUuid(), req.GetTalosVersion())
 	if err != nil {
 		return nil, status.Error(codes.Internal, fmt.Sprintf("error generating node address: %s", err))
 	}
 
-	pubKey, err := wgtypes.ParseKey(req.NodePublicKey)
+	pubKey, err := wgtypes.ParseKey(req.GetNodePublicKey())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("error parsing Wireguard key: %s", err))
 	}
 
 	var virtualNode netip.Prefix
 
-	if req.WireguardOverGrpc != nil && *req.WireguardOverGrpc {
-		virtualNode, err = generateRandomNodeAddr(srv.cfg.VirtualPrefix)
+	if req.GetWireguardOverGrpc() {
+		virtualNode, err = wireguard.GenerateRandomNodeAddr(srv.cfg.VirtualPrefix)
 		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("error generating tunnel endpoint: %s", err))
 		}
@@ -120,18 +123,4 @@ func (srv *Server) Provision(_ context.Context, req *pb.ProvisionRequest) (*pb.P
 		ServerAddress:     srv.cfg.ServerAddress.String(),
 		GrpcPeerAddrPort:  grpcPeerAddrPort,
 	}, nil
-}
-
-func generateRandomNodeAddr(prefix netip.Prefix) (netip.Prefix, error) {
-	raw := prefix.Addr().As16()
-	salt := make([]byte, 8)
-
-	_, err := io.ReadFull(rand.Reader, salt)
-	if err != nil {
-		return netip.Prefix{}, err
-	}
-
-	copy(raw[8:], salt)
-
-	return netip.PrefixFrom(netip.AddrFrom16(raw), prefix.Bits()), nil
 }

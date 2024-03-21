@@ -5,7 +5,9 @@
 package wireguard
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"io"
 	"net/netip"
 )
 
@@ -39,4 +41,19 @@ func networkPrefix(installationID string, suffix byte) netip.Prefix {
 	prefixData[7] = suffix
 
 	return netip.PrefixFrom(netip.AddrFrom16(prefixData), 64).Masked()
+}
+
+// GenerateRandomNodeAddr generates a random node address within the last 8 bytes of the given prefix.
+func GenerateRandomNodeAddr(prefix netip.Prefix) (netip.Prefix, error) {
+	raw := prefix.Addr().As16()
+	salt := make([]byte, 8)
+
+	_, err := io.ReadFull(rand.Reader, salt)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+
+	copy(raw[8:], salt)
+
+	return netip.PrefixFrom(netip.AddrFrom16(raw), prefix.Bits()), nil
 }

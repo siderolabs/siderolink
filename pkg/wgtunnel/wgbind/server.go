@@ -186,7 +186,7 @@ func wrapWithDebugLoggerSlow(l *zap.Logger, fns []conn.ReceiveFunc) []conn.Recei
 
 			l.Debug("non GRPC ReceiveFunc returned", zap.Int("n", n), zap.Int("i", i))
 
-			for j := 0; j < n; j++ {
+			for j := range n {
 				l.Debug(
 					"non GRPC ReceiveFunc packet",
 					zap.Int("size", sizes[j]),
