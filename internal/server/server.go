@@ -35,16 +35,14 @@ type NodeProvisioner interface {
 }
 
 // Config configures the server.
-//
-//nolint:govet
 type Config struct {
 	NodeProvisioner NodeProvisioner
 	ServerAddress   netip.Addr
 	ServerEndpoint  netip.AddrPort
 	VirtualPrefix   netip.Prefix
+	Logger          *zap.Logger
 	JoinToken       string
 	ServerPublicKey wgtypes.Key
-	Logger          *zap.Logger
 }
 
 // NewServer initializes new server.

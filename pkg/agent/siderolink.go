@@ -26,19 +26,17 @@ import (
 	"github.com/siderolabs/siderolink/pkg/wireguard"
 )
 
-//nolint:govet
 type sideroLinkConfig struct {
 	wireguardEndpoint string
 	apiEndpoint       string
 	joinToken         string
-	forceUserspace    bool
 	predefinedPairs   []bindUUIDtoIPv6
+	forceUserspace    bool
 }
 
-//nolint:govet
 type bindUUIDtoIPv6 struct {
-	UUID string
 	IPv6 netip.Addr
+	UUID string
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, peerHandler wireguard.PeerHandler, logger *zap.Logger) error {
@@ -80,14 +78,14 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 
 	wgDevice, err := wireguard.NewDevice(
 		wireguard.DeviceConfig{
-			PrivateKey:             privateKey,
-			ServerPrefix:           serverPrefix,
-			ListenPort:             wireguardEndpoint.Port(),
-			ForceUserspace:         cfg.forceUserspace,
 			Bind:                   wgbind.NewServerBind(conn.NewDefaultBind(), grpcEndpointsPrefix, pt, logger),
-			AutoPeerRemoveInterval: 10 * time.Second,
 			PeerHandler:            p,
 			Logger:                 logger,
+			ServerPrefix:           serverPrefix,
+			PrivateKey:             privateKey,
+			AutoPeerRemoveInterval: 10 * time.Second,
+			ListenPort:             wireguardEndpoint.Port(),
+			ForceUserspace:         cfg.forceUserspace,
 		},
 	)
 	if err != nil {

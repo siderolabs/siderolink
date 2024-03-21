@@ -19,16 +19,14 @@ import (
 )
 
 // Config is the configuration for the agent.
-//
-//nolint:govet
 type Config struct {
 	WireguardEndpoint string   // WireguardEndpoint is the endpoint for the Wireguard server.
 	APIEndpoint       string   // APIEndpoint is the gRPC endpoint for the SideroLink API.
 	JoinToken         string   // JoinToken is the join token for the SideroLink API.
-	ForceUserspace    bool     // ForceUserspace forces the usage of the userspace UDP device for Wireguard.
 	SinkEndpoint      string   // SinkEndpoint is the gRPC endpoint for the event sink.
 	LogEndpoint       string   // LogEndpoint is the TCP log receiver endpoint.
 	UUIDIPv6Pairs     []string // UUIDIPv6Pairs is a list of UUIDs=IPv6 addrs for the nodes.
+	ForceUserspace    bool     // ForceUserspace forces the usage of the userspace UDP device for Wireguard.
 }
 
 // Run runs the agent. [wireguard.PeerHandler] can be nil.

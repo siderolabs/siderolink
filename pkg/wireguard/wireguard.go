@@ -66,25 +66,23 @@ type Device struct {
 }
 
 // DeviceConfig is the configuration for the wireguard device.
-//
-//nolint:govet
 type DeviceConfig struct {
-	// PrivateKey is the server private key.
-	PrivateKey wgtypes.Key
-	// ServerPrefix is the prefix to bind to the wireguard device.
-	ServerPrefix netip.Prefix
-	// ListenPort is the port to listen on. If zero, a random port is used.
-	ListenPort uint16
-	// ForceUserspace forces the use of userspace wireguard implementation. If Bind is set this field is always true.
-	ForceUserspace bool
 	// Bind is the bind configuration for the wireguard device. If nil the default bind is used.
 	Bind conn.Bind
-	// AutoPeerRemoveInterval is the checks interval to remove downed peers. If zero, it's disabled.
-	AutoPeerRemoveInterval time.Duration
 	// PeerHandler is the optional handler for peer events.
 	PeerHandler PeerHandler
 	// Logger is the logger to use.
 	Logger *zap.Logger
+	// ServerPrefix is the prefix to bind to the wireguard device.
+	ServerPrefix netip.Prefix
+	// PrivateKey is the server private key.
+	PrivateKey wgtypes.Key
+	// AutoPeerRemoveInterval is the checks interval to remove downed peers. If zero, it's disabled.
+	AutoPeerRemoveInterval time.Duration
+	// ListenPort is the port to listen on. If zero, a random port is used.
+	ListenPort uint16
+	// ForceUserspace forces the use of userspace wireguard implementation. If Bind is set this field is always true.
+	ForceUserspace bool
 }
 
 // PeerHandler is an interface for handling peer events.
