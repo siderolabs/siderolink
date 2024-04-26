@@ -2,12 +2,12 @@
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2024-03-20T20:16:10Z by kres latest.
+# Generated on 2024-04-26T15:13:42Z by kres ebc009d.
 
 ARG TOOLCHAIN
 
 # runs markdownlint
-FROM docker.io/node:21.7.1-alpine3.19 AS lint-markdown
+FROM docker.io/node:21.7.3-alpine3.19 AS lint-markdown
 WORKDIR /src
 RUN npm i -g markdownlint-cli@0.39.0
 RUN npm i sentences-per-line@0.2.1
