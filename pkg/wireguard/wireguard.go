@@ -380,9 +380,9 @@ func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvents []PeerEvent) e
 				handleErr = handler.HandlePeerAdded(peerEvent)
 			}
 
-			peerEvents = slices.Delete(peerEvents, i, i+1)
-
 			if handleErr != nil {
+				peerEvents = slices.Delete(peerEvents, i, i+1)
+
 				err = multierr.Append(err, fmt.Errorf("peer handler failed on peer event %w", handleErr))
 			}
 		}
