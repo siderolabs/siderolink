@@ -1,6 +1,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2024-04-26T15:13:42Z by kres ebc009d.
+# Generated on 2024-05-13T15:08:28Z by kres ce88e1c.
 
 # common variables
 
@@ -20,9 +20,9 @@ GRPC_GO_VERSION ?= 1.3.0
 GRPC_GATEWAY_VERSION ?= 2.19.1
 VTPROTOBUF_VERSION ?= 0.6.0
 DEEPCOPY_VERSION ?= v0.5.6
-GOLANGCILINT_VERSION ?= v1.57.2
+GOLANGCILINT_VERSION ?= v1.58.0
 GOFUMPT_VERSION ?= v0.6.0
-GO_VERSION ?= 1.22.2
+GO_VERSION ?= 1.22.3
 GOIMPORTS_VERSION ?= v0.20.0
 GO_BUILDFLAGS ?=
 GO_LDFLAGS ?=
@@ -175,10 +175,6 @@ unit-tests:  ## Performs unit tests
 .PHONY: unit-tests-race
 unit-tests-race:  ## Performs unit tests with race detection enabled.
 	@$(MAKE) target-$@
-
-.PHONY: coverage
-coverage:  ## Upload coverage data to codecov.io.
-	bash -c "bash <(curl -s https://codecov.io/bash) -f $(ARTIFACTS)/coverage-unit-tests.txt -X fix"
 
 .PHONY: $(ARTIFACTS)/siderolink-agent-darwin-amd64
 $(ARTIFACTS)/siderolink-agent-darwin-amd64:

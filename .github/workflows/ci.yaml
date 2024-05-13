@@ -1,6 +1,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2024-04-26T15:13:42Z by kres ebc009d.
+# Generated on 2024-05-13T15:08:28Z by kres ce88e1c.
 
 name: default
 concurrency:
@@ -31,7 +31,7 @@ jobs:
     if: (!startsWith(github.head_ref, 'renovate/') && !startsWith(github.head_ref, 'dependabot/'))
     services:
       buildkitd:
-        image: moby/buildkit:v0.13.1
+        image: moby/buildkit:v0.13.2
         options: --privileged
         ports:
           - 1234:1234
@@ -61,8 +61,11 @@ jobs:
         run: |
           make unit-tests-race
       - name: coverage
-        run: |
-          make coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: _out/coverage-unit-tests.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
+        timeout-minutes: 3
       - name: siderolink-agent
         run: |
           make siderolink-agent

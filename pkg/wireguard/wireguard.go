@@ -6,6 +6,7 @@
 package wireguard
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -25,6 +26,8 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	"github.com/siderolabs/siderolink/pkg/iter"
 )
 
 const (
@@ -257,7 +260,7 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 	handlePeerEvent := func(events []PeerEvent) error {
 		defer releaseSlice(events)
 
-		return dev.handlePeerEvent(logger, events)
+		return dev.handlePeerEvent(events, logger)
 	}
 
 	for {
@@ -329,113 +332,23 @@ func (dev *Device) configurePrivateKey() error {
 	})
 }
 
-func (dev *Device) checkDuplicateUpdate(client *wgctrl.Client, logger *zap.Logger, peerEvent PeerEvent) (bool, error) {
-	oldCfg, err := client.Device(dev.ifaceName)
-	if err != nil {
-		return false, fmt.Errorf("error retrieving Wireguard configuration: %w", err)
-	}
-
-	// check if this update can be skipped
-	pubKey := peerEvent.PubKey.String()
-
-	for _, oldPeer := range oldCfg.Peers {
-		if oldPeer.PublicKey.String() == pubKey {
-			if len(oldPeer.AllowedIPs) != 1 {
-				break
-			}
-
-			if prefix, ok := netipx.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
-				if prefix.Addr() == peerEvent.Address && // check address match & keepalive settings match
-					(peerEvent.PersistentKeepAliveInterval == nil || pointer.SafeDeref(peerEvent.PersistentKeepAliveInterval) == oldPeer.PersistentKeepaliveInterval) {
-					// skip the update
-					logger.Info("skipping peer update", zap.String("public_key", pubKey))
-
-					return true, nil
-				}
-			}
-
-			break
-		}
-	}
-
-	return false, nil
-}
-
-func (dev *Device) handlePeerEvent(logger *zap.Logger, peerEvents []PeerEvent) error {
+func (dev *Device) handlePeerEvent(peerEvents []PeerEvent, logger *zap.Logger) error {
 	dev.clientMu.Lock()
 	defer dev.clientMu.Unlock()
 
-	var err error
-
-	if handler := dev.dc.PeerHandler; handler != nil {
-		for i := 0; i < len(peerEvents); i++ {
-			var (
-				peerEvent = peerEvents[i]
-				handleErr error
-			)
-
-			if peerEvent.Remove {
-				handleErr = handler.HandlePeerRemoved(peerEvent.PubKey)
-			} else {
-				handleErr = handler.HandlePeerAdded(peerEvent)
-			}
-
-			peerEvents = slices.Delete(peerEvents, i, i+1)
-
-			if handleErr != nil {
-				err = multierr.Append(err, fmt.Errorf("peer handler failed on peer event %w", handleErr))
-			}
-		}
+	oldCfg, err := dev.client.Device(dev.ifaceName)
+	if err != nil {
+		return err
 	}
 
-	if len(peerEvents) == 1 && !peerEvents[0].Remove {
-		skipEvent, duplicateErr := dev.checkDuplicateUpdate(dev.client, logger, peerEvents[0])
-		if duplicateErr != nil {
-			return duplicateErr
-		}
+	cfgs, err := PrepareDeviceConfig(peerEvents, oldCfg, dev.dc.PeerHandler, logger)
 
-		if skipEvent {
-			return nil
-		}
+	if len(cfgs) == 0 {
+		return err
 	}
 
-	cfg := wgtypes.Config{
-		Peers: make([]wgtypes.PeerConfig, 0, len(peerEvents)),
-	}
-
-	for _, peerEvent := range peerEvents {
-		peerCfg := wgtypes.PeerConfig{
-			PublicKey: peerEvent.PubKey,
-			Remove:    peerEvent.Remove,
-		}
-
-		if !peerEvent.Remove {
-			peerCfg.ReplaceAllowedIPs = true
-			peerCfg.AllowedIPs = []net.IPNet{
-				*netipx.PrefixIPNet(netip.PrefixFrom(peerEvent.Address, peerEvent.Address.BitLen())),
-			}
-			peerCfg.PersistentKeepaliveInterval = peerEvent.PersistentKeepAliveInterval
-
-			if peerEvent.Endpoint != "" {
-				ip, parseErr := netip.ParseAddrPort(peerEvent.Endpoint)
-				if parseErr != nil {
-					err = multierr.Append(err, parseErr)
-
-					continue
-				}
-
-				peerCfg.Endpoint = asUDP(ip)
-			}
-
-			logger.Info("updating peer", zap.Stringer("public_key", peerEvent.PubKey), zap.Stringer("address", peerEvent.Address))
-		} else {
-			logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
-		}
-
-		cfg.Peers = append(cfg.Peers, peerCfg)
-	}
-
-	if confErr := dev.client.ConfigureDevice(dev.ifaceName, cfg); confErr != nil {
+	// err may be non-nil if there was an error but cfgs are still valid if not empty
+	if confErr := dev.client.ConfigureDevice(dev.ifaceName, wgtypes.Config{Peers: cfgs}); confErr != nil {
 		err = multierr.Append(err, fmt.Errorf("error configuring Wireguard peers: %w", confErr))
 	}
 
@@ -517,7 +430,8 @@ func (dev *Device) Close() (err error) {
 	return nil
 }
 
-func asUDP(addr netip.AddrPort) *net.UDPAddr {
+// AsUDP converts netip.AddrPort to net.UDPAddr.
+func AsUDP(addr netip.AddrPort) *net.UDPAddr {
 	return &net.UDPAddr{
 		IP:   addr.Addr().AsSlice(),
 		Port: int(addr.Port()),
@@ -558,4 +472,109 @@ func runPeersDrainer(ctx context.Context, peers PeerSource) (chan []PeerEvent, f
 		clear(slc)
 		pool.Put(slc[:0]) //nolint:staticcheck
 	}
+}
+
+// PrepareDeviceConfig takes a list of peer events and prepares a list of peer configurations comparing them with the old configuration.
+func PrepareDeviceConfig(peerEvents []PeerEvent, oldCfg *wgtypes.Device, userHandler PeerHandler, logger *zap.Logger) ([]wgtypes.PeerConfig, error) {
+	if oldCfg == nil {
+		panic("oldCfg is nil")
+	}
+
+	slices.SortStableFunc(peerEvents, func(a, b PeerEvent) int { return bytes.Compare(a.PubKey[:], b.PubKey[:]) })
+
+	it := iter.Deduplicate(peerEvents, func(a, b PeerEvent) bool { return a.PubKey == b.PubKey })
+
+	var err error
+
+	if userHandler != nil {
+		it = iter.Filter(it, func(event PeerEvent) bool {
+			var handleErr error
+
+			if event.Remove {
+				handleErr = userHandler.HandlePeerRemoved(event.PubKey)
+			} else {
+				handleErr = userHandler.HandlePeerAdded(event)
+			}
+
+			if handleErr != nil {
+				err = multierr.Append(err, fmt.Errorf("peer handler failed on peer event %w", handleErr))
+
+				return false
+			}
+
+			return true
+		})
+	}
+
+	peers := make([]wgtypes.PeerConfig, 0, len(peerEvents))
+	it = checkDuplicateUpdates(it, oldCfg, logger)
+
+	it(func(peerEvent PeerEvent) bool {
+		peerCfg := wgtypes.PeerConfig{
+			PublicKey: peerEvent.PubKey,
+			Remove:    peerEvent.Remove,
+		}
+
+		if !peerEvent.Remove {
+			peerCfg.ReplaceAllowedIPs = true
+			peerCfg.AllowedIPs = []net.IPNet{
+				*netipx.PrefixIPNet(netip.PrefixFrom(peerEvent.Address, peerEvent.Address.BitLen())),
+			}
+			peerCfg.PersistentKeepaliveInterval = peerEvent.PersistentKeepAliveInterval
+
+			if peerEvent.Endpoint != "" {
+				ip, parseErr := netip.ParseAddrPort(peerEvent.Endpoint)
+				if parseErr != nil {
+					err = multierr.Append(err, parseErr)
+
+					return true
+				}
+
+				peerCfg.Endpoint = AsUDP(ip)
+			}
+
+			logger.Info("updating peer", zap.Stringer("public_key", peerEvent.PubKey), zap.Stringer("address", peerEvent.Address))
+		} else {
+			logger.Info("removing peer", zap.Stringer("public_key", peerEvent.PubKey))
+		}
+
+		peers = append(peers, peerCfg)
+
+		return true
+	})
+
+	if len(peers) == 0 {
+		return nil, err
+	}
+
+	return peers, err
+}
+
+func checkDuplicateUpdates(seq iter.Seq[PeerEvent], oldCfg *wgtypes.Device, logger *zap.Logger) iter.Seq[PeerEvent] {
+	return iter.Filter(seq, func(peerEvent PeerEvent) bool {
+		// check if this update can be skipped
+		pubKey := peerEvent.PubKey.String()
+
+		for _, oldPeer := range oldCfg.Peers {
+			if oldPeer.PublicKey.String() == pubKey {
+				if len(oldPeer.AllowedIPs) != 1 {
+					break
+				}
+
+				if prefix, ok := netipx.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
+					if prefix.Addr() == peerEvent.Address && // check address match & keepalive settings match
+						(peerEvent.PersistentKeepAliveInterval == nil || pointer.SafeDeref(peerEvent.PersistentKeepAliveInterval) == oldPeer.PersistentKeepaliveInterval) {
+						// skip the update
+						logger.Info("skipping peer update", zap.String("public_key", pubKey))
+
+						return false
+					}
+				}
+
+				break
+			}
+		}
+
+		return true
+	})
 }
