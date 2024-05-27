@@ -25,6 +25,7 @@ import (
 	"github.com/siderolabs/siderolink/pkg/wireguard"
 )
 
+//nolint:maintidx
 func TestPrepareDeviceConfig(t *testing.T) {
 	//nolint:govet
 	tests := map[string]struct {
@@ -112,6 +113,98 @@ func TestPrepareDeviceConfig(t *testing.T) {
 			},
 			check: check.NoError(),
 		},
+		"remove skipped": {
+			peerEvents: []wireguard.PeerEvent{
+				{
+					PubKey:                      keys[0].PublicKey(),
+					Remove:                      true,
+					Endpoint:                    endpoints[0],
+					Address:                     addresses1[0],
+					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+				},
+			},
+			oldCfg: &wgtypes.Device{
+				Name:  "if9",
+				Type:  wgtypes.Userspace,
+				Peers: []wgtypes.Peer{},
+			},
+			check: check.NoError(),
+		},
+		"just remove": {
+			peerEvents: []wireguard.PeerEvent{
+				{
+					PubKey:                      keys[0].PublicKey(),
+					Remove:                      true,
+					Endpoint:                    endpoints[0],
+					Address:                     addresses1[0],
+					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+				},
+			},
+			oldCfg: &wgtypes.Device{
+				Name: "if9",
+				Type: wgtypes.Userspace,
+				Peers: []wgtypes.Peer{
+					{
+						PublicKey: keys[0].PublicKey(),
+						AllowedIPs: []net.IPNet{
+							*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[0], addresses1[0].BitLen())),
+						},
+						PersistentKeepaliveInterval: persistentKeepaliveInterval,
+					},
+				},
+			},
+			expectedCfgs: []wgtypes.PeerConfig{
+				{
+					PublicKey:                   keys[0].PublicKey(),
+					Remove:                      true,
+					Endpoint:                    nil,
+					PersistentKeepaliveInterval: nil,
+					ReplaceAllowedIPs:           false,
+					AllowedIPs:                  nil,
+				},
+			},
+			check: check.NoError(),
+		},
+		"add remove add": {
+			peerEvents: []wireguard.PeerEvent{
+				{
+					PubKey:                      keys[0].PublicKey(),
+					Endpoint:                    endpoints[0],
+					Address:                     addresses1[0],
+					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+				},
+				{
+					PubKey:                      keys[0].PublicKey(),
+					Remove:                      true,
+					Endpoint:                    endpoints[1],
+					Address:                     addresses1[1],
+					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+				},
+				{
+					PubKey:                      keys[0].PublicKey(),
+					Endpoint:                    endpoints[1],
+					Address:                     addresses1[1],
+					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+				},
+			},
+			oldCfg: &wgtypes.Device{
+				Name:  "if9",
+				Type:  wgtypes.Userspace,
+				Peers: []wgtypes.Peer{},
+			},
+			expectedCfgs: []wgtypes.PeerConfig{
+				{
+					PublicKey:                   keys[0].PublicKey(),
+					Endpoint:                    wireguard.AsUDP(netip.MustParseAddrPort(endpoints[1])),
+					PersistentKeepaliveInterval: pointer.To(persistentKeepaliveInterval),
+					ReplaceAllowedIPs:           true,
+					AllowedIPs: []net.IPNet{
+						*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[1], addresses1[1].BitLen())),
+					},
+				},
+			},
+			check: check.NoError(),
+		},
 		"deduplicate and remove": {
 			peerEvents: []wireguard.PeerEvent{
 				{
@@ -135,9 +228,18 @@ func TestPrepareDeviceConfig(t *testing.T) {
 				},
 			},
 			oldCfg: &wgtypes.Device{
-				Name:  "if9",
-				Type:  wgtypes.Userspace,
-				Peers: []wgtypes.Peer{},
+				Name: "if9",
+				Type: wgtypes.Userspace,
+				Peers: []wgtypes.Peer{
+					{
+						PublicKey:                   keys[0].PublicKey(),
+						Endpoint:                    wireguard.AsUDP(netip.MustParseAddrPort(endpoints[2])),
+						PersistentKeepaliveInterval: persistentKeepaliveInterval,
+						AllowedIPs: []net.IPNet{
+							*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[2], addresses1[2].BitLen())),
+						},
+					},
+				},
 			},
 			expectedCfgs: []wgtypes.PeerConfig{
 				{

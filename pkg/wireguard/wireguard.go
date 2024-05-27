@@ -561,6 +561,10 @@ func checkDuplicateUpdates(seq iter.Seq[PeerEvent], oldCfg *wgtypes.Device, logg
 					break
 				}
 
+				if peerEvent.Remove {
+					return true
+				}
+
 				if prefix, ok := netipx.FromStdIPNet(&oldPeer.AllowedIPs[0]); ok {
 					if prefix.Addr() == peerEvent.Address && // check address match & keepalive settings match
 						(peerEvent.PersistentKeepAliveInterval == nil || pointer.SafeDeref(peerEvent.PersistentKeepAliveInterval) == oldPeer.PersistentKeepaliveInterval) {
@@ -573,6 +577,13 @@ func checkDuplicateUpdates(seq iter.Seq[PeerEvent], oldCfg *wgtypes.Device, logg
 
 				break
 			}
+		}
+
+		// the peer wasn't found in the existing peers, so skip it
+		if peerEvent.Remove {
+			logger.Info("skipping peer remove", zap.String("public_key", pubKey))
+
+			return false
 		}
 
 		return true
