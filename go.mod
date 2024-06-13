@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/jsimonetti/rtnetlink v1.4.2
+	github.com/jsimonetti/rtnetlink/v2 v2.0.2
 	github.com/planetscale/vtprotobuf v0.6.0
 	github.com/siderolabs/gen v0.4.8
 	github.com/siderolabs/go-pointer v1.0.0

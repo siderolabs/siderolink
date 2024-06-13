@@ -40,7 +40,7 @@ func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logge
 		serveErr := srv.Serve()
 
 		if errors.Is(serveErr, net.ErrClosed) && ctx.Err() != nil {
-			return nil //nolint:nilerr
+			return nil
 		}
 
 		return serveErr

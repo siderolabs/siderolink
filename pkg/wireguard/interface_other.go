@@ -13,7 +13,7 @@ import (
 	"net"
 	netip "net/netip"
 
-	"github.com/jsimonetti/rtnetlink/rtnl"
+	"github.com/jsimonetti/rtnetlink/v2/rtnl"
 	"go4.org/netipx"
 )
 
