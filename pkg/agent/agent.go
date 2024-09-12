@@ -7,6 +7,7 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -20,13 +21,14 @@ import (
 
 // Config is the configuration for the agent.
 type Config struct {
-	WireguardEndpoint string   // WireguardEndpoint is the endpoint for the Wireguard server.
-	APIEndpoint       string   // APIEndpoint is the gRPC endpoint for the SideroLink API.
-	JoinToken         string   // JoinToken is the join token for the SideroLink API.
-	SinkEndpoint      string   // SinkEndpoint is the gRPC endpoint for the event sink.
-	LogEndpoint       string   // LogEndpoint is the TCP log receiver endpoint.
-	UUIDIPv6Pairs     []string // UUIDIPv6Pairs is a list of UUIDs=IPv6 addrs for the nodes.
-	ForceUserspace    bool     // ForceUserspace forces the usage of the userspace UDP device for Wireguard.
+	WireguardEndpoint string      // WireguardEndpoint is the endpoint for the Wireguard server.
+	APIEndpoint       string      // APIEndpoint is the gRPC endpoint for the SideroLink API.
+	APITLSConfig      *tls.Config // APITLSConfig is the TLS configuration for the SideroLink API (if nil, served over plain TCP).
+	JoinToken         string      // JoinToken is the join token for the SideroLink API.
+	SinkEndpoint      string      // SinkEndpoint is the gRPC endpoint for the event sink.
+	LogEndpoint       string      // LogEndpoint is the TCP log receiver endpoint.
+	UUIDIPv6Pairs     []string    // UUIDIPv6Pairs is a list of UUIDs=IPv6 addrs for the nodes.
+	ForceUserspace    bool        // ForceUserspace forces the usage of the userspace UDP device for Wireguard.
 }
 
 // Run runs the agent. [wireguard.PeerHandler] can be nil.
@@ -78,6 +80,7 @@ func run(ctx context.Context, cfg Config, peerHandler wireguard.PeerHandler, eg 
 	linkCfg := sideroLinkConfig{
 		wireguardEndpoint: cfg.WireguardEndpoint,
 		apiEndpoint:       cfg.APIEndpoint,
+		apiTLSConfig:      cfg.APITLSConfig,
 		joinToken:         cfg.JoinToken,
 		forceUserspace:    cfg.ForceUserspace,
 		predefinedPairs:   bindPairs,

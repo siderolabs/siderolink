@@ -6,6 +6,7 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/netip"
@@ -29,6 +30,7 @@ import (
 type sideroLinkConfig struct {
 	wireguardEndpoint string
 	apiEndpoint       string
+	apiTLSConfig      *tls.Config // if not-nil, the API will be served over TLS
 	joinToken         string
 	predefinedPairs   []bindUUIDtoIPv6
 	forceUserspace    bool
@@ -40,7 +42,17 @@ type bindUUIDtoIPv6 struct {
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, peerHandler wireguard.PeerHandler, logger *zap.Logger) error {
-	lis, err := net.Listen("tcp", cfg.apiEndpoint)
+	var (
+		lis net.Listener
+		err error
+	)
+
+	if cfg.apiTLSConfig != nil {
+		lis, err = tls.Listen("tcp", cfg.apiEndpoint, cfg.apiTLSConfig)
+	} else {
+		lis, err = net.Listen("tcp", cfg.apiEndpoint)
+	}
+
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC API: %w", err)
 	}

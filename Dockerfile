@@ -1,13 +1,13 @@
-# syntax = docker/dockerfile-upstream:1.8.0-labs
+# syntax = docker/dockerfile-upstream:1.9.0-labs
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2024-06-13T13:02:13Z by kres c9bcf1d.
+# Generated on 2024-09-12T13:42:52Z by kres 8be5fa7.
 
 ARG TOOLCHAIN
 
 # runs markdownlint
-FROM docker.io/oven/bun:1.1.13-alpine AS lint-markdown
+FROM docker.io/oven/bun:1.1.26-alpine AS lint-markdown
 WORKDIR /src
 RUN bun i markdownlint-cli@0.41.0 sentences-per-line@0.2.1
 COPY .markdownlint.json .
