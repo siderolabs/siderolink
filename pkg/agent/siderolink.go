@@ -19,6 +19,8 @@ import (
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/siderolabs/siderolink/api/siderolink"
 	"github.com/siderolabs/siderolink/internal/server"
@@ -42,17 +44,7 @@ type bindUUIDtoIPv6 struct {
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, peerHandler wireguard.PeerHandler, logger *zap.Logger) error {
-	var (
-		lis net.Listener
-		err error
-	)
-
-	if cfg.apiTLSConfig != nil {
-		lis, err = tls.Listen("tcp", cfg.apiEndpoint, cfg.apiTLSConfig)
-	} else {
-		lis, err = net.Listen("tcp", cfg.apiEndpoint)
-	}
-
+	lis, err := net.Listen("tcp", cfg.apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC API: %w", err)
 	}
@@ -114,7 +106,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 		Logger:          logger,
 	})
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(getCreds(cfg.apiTLSConfig))
 	pb.RegisterProvisionServiceServer(s, srv)
 	pb.RegisterWireGuardOverGRPCServiceServer(s, wggrpc.NewService(pt, allowedPeers, logger))
 
@@ -135,6 +127,14 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 	context.AfterFunc(ctx, stopServer)
 
 	return nil
+}
+
+func getCreds(cfg *tls.Config) grpc.ServerOption {
+	if cfg != nil {
+		return grpc.Creds(credentials.NewTLS(cfg))
+	}
+
+	return grpc.Creds(insecure.NewCredentials())
 }
 
 type peerProvider struct {
