@@ -107,7 +107,7 @@ func (suite *SinkSuite) TearDownSuite() {
 }
 
 func (suite *SinkSuite) TestPublish() {
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", suite.sock), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", suite.sock), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	suite.Require().NoError(err)
 
 	defer conn.Close() //nolint:errcheck

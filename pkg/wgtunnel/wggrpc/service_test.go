@@ -145,7 +145,7 @@ func testServer(ctx context.Context, t *testing.T, pt *wgbind.PeerTraffic, l *za
 }
 
 func testClient(ctx context.Context, t *testing.T, eg *errgroup.Group, ourAddr netip.AddrPort, logger *zap.Logger) {
-	conn := createConn(ctx, t, "127.0.0.1:10888")
+	conn := createConn(t, "127.0.0.1:10888")
 	qp := wgbind.NewQueuePair(10, 2)
 
 	relay := wggrpc.NewRelay(conn, 5*time.Second, qp, ourAddr)
@@ -195,8 +195,8 @@ func startService(t *testing.T, pt *wgbind.PeerTraffic, ap *wggrpc.AllowedPeers,
 	})
 }
 
-func createConn(ctx context.Context, t *testing.T, addr string) *grpc.ClientConn { //nolint:unparam
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func createConn(t *testing.T, addr string) *grpc.ClientConn { //nolint:unparam
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -272,7 +272,7 @@ func TestReplacingConnectionService(t *testing.T) {
 
 			t.Parallel()
 
-			conn := createConn(client1Ctx, t, "127.0.0.1:10888")
+			conn := createConn(t, "127.0.0.1:10888")
 			qp := wgbind.NewQueuePair(10, 2)
 
 			go func() {
@@ -303,7 +303,7 @@ func TestReplacingConnectionService(t *testing.T) {
 
 			<-client1ExchangeComplete
 
-			conn := createConn(client2Ctx, t, "127.0.0.1:10888")
+			conn := createConn(t, "127.0.0.1:10888")
 			qp := wgbind.NewQueuePair(10, 2)
 
 			go func() {
@@ -387,7 +387,7 @@ func TestNotAllowedPeer(t *testing.T) {
 
 			t.Parallel()
 
-			conn := createConn(ctx, t, "127.0.0.1:10888")
+			conn := createConn(t, "127.0.0.1:10888")
 			qp := wgbind.NewQueuePair(10, 2)
 
 			go func() {

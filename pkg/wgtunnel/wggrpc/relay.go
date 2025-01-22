@@ -36,7 +36,7 @@ func NewRelayToHost(host string, retryTimeout time.Duration, queues *wgbind.Queu
 		return nil, errors.New("our address must be non-empty")
 	}
 
-	conn, err := grpc.Dial(host, opts...)
+	conn, err := grpc.NewClient(host, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ type clientWaitValue = wait.Value[pb.WireGuardOverGRPCService_CreateStreamClient
 // Run runs the [Relay]. It consumes and sends packets from|to the [*QueuePair].
 func (r *Relay) Run(ctx context.Context, logger *zap.Logger) error {
 	ok, closeFn := r.openClose.Open(func() {
-		ctx, r.cancelFn = context.WithCancel(ctx)
+		ctx, r.cancelFn = context.WithCancel(ctx) //nolint:fatcontext
 	})
 	if !ok {
 		return errors.New("relay already running/closed")
