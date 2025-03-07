@@ -23,11 +23,12 @@ import (
 	"go4.org/netipx"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun"
+	wgtun "golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/siderolabs/siderolink/pkg/iter"
+	"github.com/siderolabs/siderolink/pkg/tun"
 )
 
 const (
@@ -64,7 +65,7 @@ type Device struct {
 	// ifaceName is the name of the underlying Wireguard interface.
 	ifaceName string
 	// tun is the underlying userspace wireguard tun device. Its value is nil if native wireguard is used.
-	tun tun.Device
+	tun wgtun.Device
 
 	clientMu sync.Mutex
 	client   *wgctrl.Client
@@ -80,13 +81,16 @@ type DeviceConfig struct {
 	Logger *zap.Logger
 	// ServerPrefix is the prefix to bind to the wireguard device.
 	ServerPrefix netip.Prefix
+	// InputPacketFilters enables packet filtering on the wireguard level.
+	InputPacketFilters []tun.InputPacketFilter
 	// PrivateKey is the server private key.
 	PrivateKey wgtypes.Key
 	// AutoPeerRemoveInterval is the checks interval to remove downed peers. If zero, it's disabled.
 	AutoPeerRemoveInterval time.Duration
 	// ListenPort is the port to listen on. If zero, a random port is used.
 	ListenPort uint16
-	// ForceUserspace forces the use of userspace wireguard implementation. If Bind is set this field is always true.
+	// ForceUserspace forces the use of userspace wireguard implementation.
+	// If Bind or InputPacketFilters is set this field is always true.
 	ForceUserspace bool
 }
 
@@ -98,7 +102,7 @@ type PeerHandler interface {
 
 // NewDevice creates a new device with settings.
 func NewDevice(config DeviceConfig) (*Device, error) {
-	config.ForceUserspace = config.ForceUserspace || config.Bind != nil
+	config.ForceUserspace = config.ForceUserspace || config.Bind != nil || config.InputPacketFilters != nil
 
 	client, err := wgctrl.New()
 	if err != nil {
@@ -130,7 +134,7 @@ func NewDevice(config DeviceConfig) (*Device, error) {
 
 	config.Logger.Info("attempting to configure tun device (userspace)", zap.Stringer("serverPrefix", config.ServerPrefix))
 
-	createdTun, err := tun.CreateTUN(InterfaceName, LinkMTU)
+	createdTun, err := tun.CreateTUN(InterfaceName, LinkMTU, config.InputPacketFilters...)
 	if err != nil {
 		return nil, fmt.Errorf("error creating tun device: %w", err)
 	}

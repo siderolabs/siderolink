@@ -13,9 +13,9 @@ import (
 
 	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun"
 
 	"github.com/siderolabs/siderolink/pkg/openclose"
+	"github.com/siderolabs/siderolink/pkg/tun"
 	"github.com/siderolabs/siderolink/pkg/wgtunnel/wgbind"
 	"github.com/siderolabs/siderolink/pkg/wireguard"
 )

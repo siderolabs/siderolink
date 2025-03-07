@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/jsimonetti/rtnetlink/v2"
 	"golang.org/x/sys/unix"
@@ -36,7 +38,20 @@ func createWireguardDevice(name string) (string, error) {
 		},
 	})
 	if err != nil && !errors.Is(err, fs.ErrExist) {
-		return "", fmt.Errorf("error creating wireguard device: %w", err)
+		return "", fmt.Errorf("error ating wireguard device: %w", err)
+	}
+
+	for _, path := range []string{
+		fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name),
+		fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name),
+	} {
+		if err = os.MkdirAll(filepath.Dir(path), 0o644); err != nil {
+			return "", err
+		}
+
+		if err = os.WriteFile(path, []byte("0\n"), 0o644); err != nil {
+			return "", err
+		}
 	}
 
 	return name, nil
