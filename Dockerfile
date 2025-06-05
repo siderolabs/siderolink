@@ -1,15 +1,15 @@
-# syntax = docker/dockerfile-upstream:1.14.0-labs
+# syntax = docker/dockerfile-upstream:1.16.0-labs
 
 # THIS FILE WAS AUTOMATICALLY GENERATED, PLEASE DO NOT EDIT.
 #
-# Generated on 2025-03-07T16:55:05Z by kres ef4356e.
+# Generated on 2025-06-05T10:30:41Z by kres fc6afbe.
 
 ARG TOOLCHAIN
 
 # runs markdownlint
-FROM docker.io/oven/bun:1.2.4-alpine AS lint-markdown
+FROM docker.io/oven/bun:1.2.15-alpine AS lint-markdown
 WORKDIR /src
-RUN bun i markdownlint-cli@0.44.0 sentences-per-line@0.3.0
+RUN bun i markdownlint-cli@0.45.0 sentences-per-line@0.3.0
 COPY .markdownlint.json .
 COPY ./README.md ./README.md
 RUN bunx markdownlint --ignore "CHANGELOG.md" --ignore "**/node_modules/**" --ignore '**/hack/chglog/**' --rules sentences-per-line .
@@ -37,6 +37,9 @@ ENV GOPATH=/go
 ARG GOIMPORTS_VERSION
 RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install golang.org/x/tools/cmd/goimports@v${GOIMPORTS_VERSION}
 RUN mv /go/bin/goimports /bin
+ARG GOMOCK_VERSION
+RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install go.uber.org/mock/mockgen@v${GOMOCK_VERSION}
+RUN mv /go/bin/mockgen /bin
 ARG PROTOBUF_GO_VERSION
 RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install google.golang.org/protobuf/cmd/protoc-gen-go@v${PROTOBUF_GO_VERSION}
 RUN mv /go/bin/protoc-gen-go /bin
@@ -53,7 +56,7 @@ ARG DEEPCOPY_VERSION
 RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install github.com/siderolabs/deep-copy@${DEEPCOPY_VERSION} \
 	&& mv /go/bin/deep-copy /bin/deep-copy
 ARG GOLANGCILINT_VERSION
-RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCILINT_VERSION} \
+RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCILINT_VERSION} \
 	&& mv /go/bin/golangci-lint /bin/golangci-lint
 RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg go install golang.org/x/vuln/cmd/govulncheck@latest \
 	&& mv /go/bin/govulncheck /bin/govulncheck
@@ -94,7 +97,6 @@ FROM base AS lint-golangci-lint
 WORKDIR /src
 COPY .golangci.yml .
 ENV GOGC=50
-RUN golangci-lint config verify --config .golangci.yml
 RUN --mount=type=cache,target=/root/.cache/go-build,id=siderolink/root/.cache/go-build --mount=type=cache,target=/root/.cache/golangci-lint,id=siderolink/root/.cache/golangci-lint,sharing=locked --mount=type=cache,target=/go/pkg,id=siderolink/go/pkg golangci-lint run --config .golangci.yml
 
 # runs govulncheck

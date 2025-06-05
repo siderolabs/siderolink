@@ -75,6 +75,13 @@ func (wv *Value[T]) TryGet() (T, bool) {
 	select {
 	case <-set:
 		wv.mx.Lock()
+
+		if wv.set == nil {
+			wv.mx.Unlock()
+
+			return *new(T), false
+		}
+
 		value := wv.value
 		wv.mx.Unlock()
 

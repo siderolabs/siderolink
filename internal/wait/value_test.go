@@ -6,10 +6,13 @@ package wait_test
 
 import (
 	"context"
+	"fmt"
+	"math/rand/v2"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/siderolabs/siderolink/internal/wait"
 )
@@ -88,4 +91,67 @@ func TestParallel(t *testing.T) { //nolint:tparallel
 			require.Equal(t, 0, val)
 		})
 	})
+}
+
+func TestTryGetSetUnset(t *testing.T) { //nolint:tparallel
+	t.Parallel()
+
+	var wv wait.Value[*int]
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	t.Cleanup(cancel)
+
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(time.Duration(rand.ExpFloat64() * float64(time.Millisecond))):
+			}
+
+			val := 42
+
+			wv.Set(&val)
+		}
+	})
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(time.Duration(rand.ExpFloat64() * float64(time.Millisecond))):
+			}
+
+			wv.Unset()
+		}
+	})
+
+	eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+
+			// test the contract:
+			// * either ok is false, and val is nil
+			// * or ok is true, and *val = 42
+			val, ok := wv.TryGet()
+
+			switch {
+			case !ok && val == nil:
+				// fine
+			case ok && val != nil && *val == 42:
+				// fine
+			default:
+				return fmt.Errorf("contract broken: ok=%v, val=%v", ok, val)
+			}
+		}
+	})
+
+	require.NoError(t, eg.Wait(), "error in contract")
 }
