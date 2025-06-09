@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/siderolabs/gen/ensure"
+	"github.com/siderolabs/gen/panicsafe"
 	"github.com/siderolabs/gen/xslices"
 	"github.com/siderolabs/go-pointer"
 	"go.uber.org/zap"
@@ -83,7 +84,13 @@ func app() error {
 		return fmt.Errorf("failed to create tunnel device: %w", err)
 	}
 
-	go func() { cancel(device.Run()) }()
+	go func() {
+		if runErr := panicsafe.Run(func() {
+			cancel(device.Run())
+		}); runErr != nil {
+			logger.Error("error running tunnel device", zap.Error(runErr))
+		}
+	}()
 
 	defer closeClosable(device.Close, "tunnel device", logger)
 
@@ -102,13 +109,13 @@ func app() error {
 	logger.Info("wireguard device link up", zap.String("interface", ifaceName))
 
 	go func() {
-		monitorErr := monitorPeers(ctx, ctrl, ifaceName, logger)
-		if monitorErr == nil {
-			return
-		}
+		if monitorErr := panicsafe.RunErr(func() error {
+			return monitorPeers(ctx, ctrl, ifaceName, logger)
+		}); monitorErr != nil {
+			logger.Error("peer monitoring failed", zap.Error(monitorErr))
 
-		logger.Error("peer monitoring failed", zap.Error(monitorErr))
-		cancel(monitorErr)
+			cancel(monitorErr)
+		}
 	}()
 
 	for {
@@ -202,7 +209,13 @@ func run(ctx context.Context, ctrl wgCtrl, ifaceName string, queuePair *wgbind.Q
 
 	defer closeClosable(relay.Close, "relay", logger)
 
-	go func() { cancel(relay.Run(ctx, logger)) }()
+	go func() {
+		if runErr := panicsafe.Run(func() {
+			cancel(relay.Run(ctx, logger))
+		}); runErr != nil {
+			logger.Error("error running relay", zap.Error(runErr))
+		}
+	}()
 
 	for {
 		select {
@@ -307,7 +320,10 @@ func notifyContextCause(ctx context.Context, sigs ...os.Signal) (context.Context
 }
 
 func closeClosable(closeable func(), name string, logger *zap.Logger) {
-	closeClosableErr(func() error { closeable(); return nil }, name, logger)
+	closeClosableErr(func() error {
+		closeable()
+		return nil
+	}, name, logger)
 }
 
 func closeClosableErr(closeable func() error, name string, logger *zap.Logger) {
@@ -352,8 +368,8 @@ func provision(ctx context.Context, conn *grpc.ClientConn, key wgtypes.Key, clie
 }
 
 type mxCtrl struct {
-	mx   sync.Mutex
 	ctrl *wgctrl.Client
+	mx   sync.Mutex
 }
 
 func (m *mxCtrl) ConfigureDevice(name string, cfg wgtypes.Config) error {

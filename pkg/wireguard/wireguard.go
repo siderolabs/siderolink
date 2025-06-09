@@ -17,10 +17,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"github.com/siderolabs/go-pointer"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 	"go4.org/netipx"
+	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	wgtun "golang.zx2c4.com/wireguard/tun"
@@ -174,21 +176,21 @@ func SetupIPToInterface(address netip.Prefix, ifaceName string) (func() error, e
 }
 
 // Run the device.
-func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) error {
+func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource) (retErr error) {
 	var tunDevice *device.Device
 
 	errs := make(chan error, 1)
 
 	// configure tun device
 	if dev.tun != nil {
-		var wg sync.WaitGroup
+		var eg errgroup.Group
 
 		defer func() {
 			// Both [ipc.UAPIOpen] and [device.Device] do not wait for their goroutines to finish properly,
 			// so this is our best effort attempt to wait for them to finish.
 			time.Sleep(100 * time.Millisecond)
 
-			wg.Wait()
+			retErr = errors.Join(retErr, eg.Wait())
 		}()
 
 		bnd := dev.dc.Bind
@@ -211,28 +213,22 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 			}
 		}()
 
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		eg.Go(panicsafe.RunErrF(func() error {
 			for {
 				c, e := uapi.Accept()
 				if e != nil {
 					errs <- e
 
-					return
+					return nil //nolint:nilerr
 				}
 
-				wg.Add(1)
-
-				go func() {
-					defer wg.Done()
-
+				eg.Go(panicsafe.RunErrF(func() error {
 					tunDevice.IpcHandle(c)
-				}()
+
+					return nil
+				}))
 			}
-		}()
+		}))
 	}
 
 	if err := dev.configurePrivateKey(); err != nil {
@@ -259,7 +255,7 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	eventsCh, releaseSlice := runPeersDrainer(ctx, peers)
+	eventsCh, releaseSlice := runPeersDrainer(ctx, peers, logger)
 
 	handlePeerEvent := func(events []PeerEvent) error {
 		defer releaseSlice(events)
@@ -443,7 +439,7 @@ func AsUDP(addr netip.AddrPort) *net.UDPAddr {
 	}
 }
 
-func runPeersDrainer(ctx context.Context, peers PeerSource) (chan []PeerEvent, func([]PeerEvent)) {
+func runPeersDrainer(ctx context.Context, peers PeerSource, logger *zap.Logger) (chan []PeerEvent, func([]PeerEvent)) {
 	pool := sync.Pool{
 		New: func() any { return make([]PeerEvent, 0, 100) },
 	}
@@ -451,24 +447,28 @@ func runPeersDrainer(ctx context.Context, peers PeerSource) (chan []PeerEvent, f
 	resultCh := make(chan []PeerEvent)
 
 	go func() {
-		var (
-			slc = pool.Get().([]PeerEvent) //nolint:errcheck,forcetypeassert
-			ch  chan []PeerEvent
-		)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case peerEvent := <-peers.EventCh():
-				slc = append(slc, peerEvent)
-				// allow sending only if we have events in our slice
-				ch = resultCh
-			case ch <- slc:
+		if err := panicsafe.Run(func() {
+			var (
 				slc = pool.Get().([]PeerEvent) //nolint:errcheck,forcetypeassert
-				// disallow sending until we get an event
-				ch = nil
+				ch  chan []PeerEvent
+			)
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case peerEvent := <-peers.EventCh():
+					slc = append(slc, peerEvent)
+					// allow sending only if we have events in our slice
+					ch = resultCh
+				case ch <- slc:
+					slc = pool.Get().([]PeerEvent) //nolint:errcheck,forcetypeassert
+					// disallow sending until we get an event
+					ch = nil
+				}
 			}
+		}); err != nil {
+			logger.Error("error running peers drainer", zap.Error(err))
 		}
 	}()
 

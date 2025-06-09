@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -34,7 +35,7 @@ func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logge
 
 	stopServer := sync.OnceFunc(srv.Stop)
 
-	eg.Go(func() error {
+	eg.Go(panicsafe.RunErrF(func() error {
 		defer stopServer()
 
 		serveErr := srv.Serve()
@@ -44,7 +45,7 @@ func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logge
 		}
 
 		return serveErr
-	})
+	}))
 
 	context.AfterFunc(ctx, stopServer)
 

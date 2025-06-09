@@ -9,9 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sync"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/device"
 
 	"github.com/siderolabs/siderolink/pkg/openclose"
@@ -82,16 +83,16 @@ func NewTunnelDevice(iface string, mtu int, queuePair *wgbind.QueuePair, logger 
 }
 
 // Run runs the device.
-func (td *TunnelDevice) Run() error {
+func (td *TunnelDevice) Run() (retErr error) {
 	ok, closeFn := td.openClose.Open(nil)
 	if !ok {
 		return errors.New("device already running/closed")
 	}
 
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 
 	defer func() {
-		wg.Wait()
+		retErr = errors.Join(retErr, eg.Wait())
 
 		closeFn()
 	}()
@@ -108,13 +109,11 @@ func (td *TunnelDevice) Run() error {
 			continue
 		}
 
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		eg.Go(panicsafe.RunErrF(func() error {
 			td.dev.IpcHandle(unixSock)
-		}()
+
+			return nil
+		}))
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
 	"go4.org/netipx"
 )
@@ -44,7 +45,13 @@ func (srv *Server) Serve() error {
 			return fmt.Errorf("error accepting connection: %w", err)
 		}
 
-		go srv.handleConnection(conn)
+		go func() {
+			if runErr := panicsafe.Run(func() {
+				srv.handleConnection(conn)
+			}); runErr != nil {
+				srv.logger.Error("error handling connection", zap.Error(runErr))
+			}
+		}()
 	}
 }
 

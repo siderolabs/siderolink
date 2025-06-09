@@ -18,7 +18,7 @@ func TestQueue(t *testing.T) {
 
 	q := queue.NewRingQueue[int](3)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	err := q.Push(ctx, 1)

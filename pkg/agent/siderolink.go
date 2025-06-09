@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/conn"
@@ -110,19 +111,19 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 	pb.RegisterProvisionServiceServer(s, srv)
 	pb.RegisterWireGuardOverGRPCServiceServer(s, wggrpc.NewService(pt, allowedPeers, logger))
 
-	eg.Go(func() error {
+	eg.Go(panicsafe.RunErrF(func() error {
 		defer wgDevice.Close() //nolint:errcheck
 
 		return wgDevice.Run(ctx, logger, srv)
-	})
+	}))
 
 	stopServer := sync.OnceFunc(s.Stop)
 
-	eg.Go(func() error {
+	eg.Go(panicsafe.RunErrF(func() error {
 		defer stopServer()
 
 		return s.Serve(lis)
-	})
+	}))
 
 	context.AfterFunc(ctx, stopServer)
 

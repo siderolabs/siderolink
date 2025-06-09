@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -100,7 +101,7 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 
 	l := s.logger.With(zap.String("peer", peerAddr))
 
-	eg.Go(func() error {
+	eg.Go(panicsafe.RunErrF(func() error {
 		s.wg.Add(1)
 		defer s.wg.Done()
 
@@ -123,7 +124,7 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 
 			l.Debug("service pushed packet to peer queue", zap.Int("len", len(packet.Data)))
 		}
-	})
+	}))
 
 	for {
 		select {

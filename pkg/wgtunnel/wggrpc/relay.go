@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"time"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -106,8 +107,8 @@ func (r *Relay) Run(ctx context.Context, logger *zap.Logger) error {
 
 	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs(PeerAddrKey, r.ourAddr.String()))
 
-	eg.Go(func() error { return r.runToPeer(ctx, &wv, &remoteEp, logger) })
-	eg.Go(func() error { return r.runFromPeer(ctx, &wv, &remoteEp, logger) })
+	eg.Go(panicsafe.RunErrF(func() error { return r.runToPeer(ctx, &wv, &remoteEp, logger) }))
+	eg.Go(panicsafe.RunErrF(func() error { return r.runFromPeer(ctx, &wv, &remoteEp, logger) }))
 
 	return eg.Wait()
 }

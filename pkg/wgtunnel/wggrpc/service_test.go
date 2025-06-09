@@ -37,7 +37,7 @@ import (
 func TestService(t *testing.T) {
 	defer pprof.Lookup("goroutine").WriteTo(os.Stderr, 1) //nolint:errcheck
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(t.Context(), os.Interrupt)
 	defer cancel()
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -222,7 +222,7 @@ func getClientAddrPort(nodePrefix netip.Prefix) netip.AddrPort {
 }
 
 func TestReplacingConnectionService(t *testing.T) {
-	ctx, cancelS := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancelS := signal.NotifyContext(t.Context(), os.Interrupt)
 	defer cancelS()
 
 	ctx, cancelFn := context.WithCancelCause(ctx)
@@ -355,7 +355,7 @@ func clientPopMessageFunc(ctx context.Context, t *testing.T, qp *wgbind.QueuePai
 }
 
 func TestNotAllowedPeer(t *testing.T) {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(t.Context(), os.Interrupt)
 	defer cancel()
 
 	eg, ctx := errgroup.WithContext(ctx)

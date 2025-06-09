@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/siderolabs/gen/panicsafe"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
@@ -47,11 +48,11 @@ func eventSink(ctx context.Context, apiEndpoint string, eg *errgroup.Group) erro
 
 	stopServer := sync.OnceFunc(server.Stop)
 
-	eg.Go(func() error {
+	eg.Go(panicsafe.RunErrF(func() error {
 		defer stopServer()
 
 		return server.Serve(listen)
-	})
+	}))
 
 	context.AfterFunc(ctx, stopServer)
 

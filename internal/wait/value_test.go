@@ -32,7 +32,7 @@ func TestWaitableValue(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, 42, value)
 
-	value, err := wv.Get(context.Background())
+	value, err := wv.Get(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, 42, value)
 
@@ -60,7 +60,7 @@ func TestParallel(t *testing.T) { //nolint:tparallel
 		t.Run("Get", func(t *testing.T) {
 			t.Parallel()
 
-			val, err := wv.Get(context.Background())
+			val, err := wv.Get(t.Context())
 
 			require.NoError(t, err)
 			require.Equal(t, 42, val)
@@ -73,7 +73,7 @@ func TestParallel(t *testing.T) { //nolint:tparallel
 		t.Run("Get", func(t *testing.T) {
 			t.Parallel()
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
 			defer cancel()
 
 			val, err := wv.Get(ctx)
@@ -98,7 +98,7 @@ func TestTryGetSetUnset(t *testing.T) { //nolint:tparallel
 
 	var wv wait.Value[*int]
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	t.Cleanup(cancel)
 
 	eg, ctx := errgroup.WithContext(ctx)
