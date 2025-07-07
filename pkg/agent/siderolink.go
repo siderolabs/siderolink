@@ -111,21 +111,40 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 	pb.RegisterProvisionServiceServer(s, srv)
 	pb.RegisterWireGuardOverGRPCServiceServer(s, wggrpc.NewService(pt, allowedPeers, logger))
 
+	wgCtx, wgCancel := context.WithCancel(context.Background())
+
 	eg.Go(panicsafe.RunErrF(func() error {
 		defer wgDevice.Close() //nolint:errcheck
 
-		return wgDevice.Run(ctx, logger, srv)
+		return wgDevice.Run(wgCtx, logger, srv)
+	}))
+
+	eg.Go(panicsafe.RunErrF(func() error {
+		<-ctx.Done()
+
+		time.Sleep(5 * time.Second)
+
+		wgCancel()
+
+		return nil
 	}))
 
 	stopServer := sync.OnceFunc(s.Stop)
 
 	eg.Go(panicsafe.RunErrF(func() error {
+		defer logger.Info("gRPC API server stopped")
 		defer stopServer()
 
 		return s.Serve(lis)
 	}))
 
-	context.AfterFunc(ctx, stopServer)
+	eg.Go(func() error {
+		<-ctx.Done()
+
+		stopServer()
+
+		return nil
+	})
 
 	return nil
 }

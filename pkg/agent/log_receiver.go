@@ -36,6 +36,7 @@ func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logge
 	stopServer := sync.OnceFunc(srv.Stop)
 
 	eg.Go(panicsafe.RunErrF(func() error {
+		defer logger.Info("log receiver server stopped")
 		defer stopServer()
 
 		serveErr := srv.Serve()
