@@ -20,13 +20,13 @@ import (
 )
 
 func logHandler(logger *zap.Logger) logreceiver.Handler {
-	return func(srcAddress netip.Addr, msg map[string]interface{}) {
+	return func(srcAddress netip.Addr, msg map[string]any) {
 		logger.Info("kernel log message", zap.Stringer("src_address", srcAddress), zap.Any("msg", msg))
 	}
 }
 
 func logReceiver(ctx context.Context, endpoint string, eg *errgroup.Group, logger *zap.Logger) error {
-	lis, err := net.Listen("tcp", endpoint)
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", endpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for TCP log receiver: %w", err)
 	}

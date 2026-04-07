@@ -181,7 +181,7 @@ func startService(t *testing.T, pt *wgbind.PeerTraffic, ap *wggrpc.AllowedPeers,
 
 	pb.RegisterWireGuardOverGRPCServiceServer(server, srv)
 
-	listen, err := net.Listen("tcp", "127.0.0.1:10888")
+	listen, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:10888")
 	require.NoError(t, err)
 
 	eg.Go(func() error {

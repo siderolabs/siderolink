@@ -43,6 +43,7 @@ func (q *RingQueue[T]) Push(ctx context.Context, v T) error {
 	}
 
 	q.r.Write(v)
+
 	q.nonEmpty <- struct{}{}
 
 	return nil

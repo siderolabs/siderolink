@@ -59,6 +59,7 @@ func NewTunnelDevice(iface string, mtu int, queuePair *wgbind.QueuePair, logger 
 	successfullReturn := false
 
 	result.dev = device.NewDevice(createdTun, wgbind.NewClientBind(queuePair, logger), wireguard.DeviceLogger(logger))
+
 	defer func() {
 		if successfullReturn {
 			return

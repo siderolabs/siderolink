@@ -45,7 +45,7 @@ type bindUUIDtoIPv6 struct {
 }
 
 func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, peerHandler wireguard.PeerHandler, logger *zap.Logger) error {
-	lis, err := net.Listen("tcp", cfg.apiEndpoint)
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC API: %w", err)
 	}

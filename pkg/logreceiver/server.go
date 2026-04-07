@@ -26,7 +26,7 @@ type Server struct {
 }
 
 // Handler is called for each received message.
-type Handler func(srcAddress netip.Addr, msg map[string]interface{})
+type Handler func(srcAddress netip.Addr, msg map[string]any)
 
 // NewServer initializes new Server.
 func NewServer(logger *zap.Logger, listener net.Listener, handler Handler) *Server {
@@ -78,7 +78,7 @@ func (srv *Server) handleConnection(conn net.Conn) {
 	srcAddress, _ := netipx.FromStdIP(srcAddr.IP)
 
 	for {
-		msg := map[string]interface{}{}
+		msg := map[string]any{}
 
 		if err := decoder.Decode(&msg); err != nil {
 			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {

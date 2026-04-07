@@ -77,7 +77,7 @@ type SinkSuite struct {
 func (suite *SinkSuite) SetupSuite() {
 	dir := suite.T().TempDir()
 	suite.sock = filepath.Join(dir, "grpc.sock")
-	lis, err := net.Listen("unix", suite.sock)
+	lis, err := (&net.ListenConfig{}).Listen(suite.T().Context(), "unix", suite.sock)
 	suite.Require().NoError(err)
 
 	suite.state = &state{}

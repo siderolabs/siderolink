@@ -13,9 +13,9 @@ import (
 	"sync"
 
 	"github.com/siderolabs/gen/panicsafe"
+	"go.yaml.in/yaml/v4"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v3"
 
 	eventsapi "github.com/siderolabs/siderolink/api/events"
 	"github.com/siderolabs/siderolink/pkg/events"
@@ -36,7 +36,7 @@ func (s *adapter) HandleEvent(_ context.Context, e events.Event) error {
 }
 
 func eventSink(ctx context.Context, apiEndpoint string, eg *errgroup.Group) error {
-	listen, err := net.Listen("tcp", apiEndpoint)
+	listen, err := (&net.ListenConfig{}).Listen(ctx, "tcp", apiEndpoint)
 	if err != nil {
 		return fmt.Errorf("error listening for gRPC eventsink API: %w", err)
 	}
