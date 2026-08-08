@@ -343,10 +343,10 @@ func provision(ctx context.Context, conn *grpc.ClientConn, key wgtypes.Key, clie
 		prov, err := client.Provision(ctx, &pb.ProvisionRequest{
 			NodeUuid:          clientUUID.String(),
 			NodePublicKey:     key.PublicKey().String(),
-			JoinToken:         pointer.To("foo"),
-			NodeUniqueToken:   pointer.To("random-token"),
-			TalosVersion:      pointer.To("v1.7.0-alpha.0"),
-			WireguardOverGrpc: pointer.To(true),
+			JoinToken:         new("foo"),
+			NodeUniqueToken:   new("random-token"),
+			TalosVersion:      new("v1.7.0-alpha.0"),
+			WireguardOverGrpc: new(true),
 		})
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

@@ -334,7 +334,7 @@ func (dev *Device) configurePrivateKey() error {
 
 	return dev.client.ConfigureDevice(dev.ifaceName, wgtypes.Config{
 		PrivateKey: &dev.dc.PrivateKey,
-		ListenPort: pointer.To(int(dev.dc.ListenPort)),
+		ListenPort: new(int(dev.dc.ListenPort)),
 	})
 }
 

@@ -16,7 +16,6 @@ import (
 
 	"github.com/siderolabs/gen/ensure"
 	"github.com/siderolabs/gen/xtesting/check"
-	"github.com/siderolabs/go-pointer"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"go4.org/netipx"
@@ -59,7 +58,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -71,7 +70,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 				{
 					PublicKey:                   keys[0].PublicKey(),
 					Endpoint:                    wireguard.AsUDP(netip.MustParseAddrPort(endpoints[0])),
-					PersistentKeepaliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepaliveInterval: new(persistentKeepaliveInterval),
 					ReplaceAllowedIPs:           true,
 					AllowedIPs: []net.IPNet{
 						*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[0], addresses1[0].BitLen())),
@@ -86,13 +85,13 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -104,7 +103,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 				{
 					PublicKey:                   keys[0].PublicKey(),
 					Endpoint:                    wireguard.AsUDP(netip.MustParseAddrPort(endpoints[1])),
-					PersistentKeepaliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepaliveInterval: new(persistentKeepaliveInterval),
 					ReplaceAllowedIPs:           true,
 					AllowedIPs: []net.IPNet{
 						*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[1], addresses1[1].BitLen())),
@@ -120,7 +119,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					Remove:                      true,
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -137,7 +136,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					Remove:                      true,
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -171,20 +170,20 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Remove:                      true,
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -196,7 +195,7 @@ func TestPrepareDeviceConfig(t *testing.T) {
 				{
 					PublicKey:                   keys[0].PublicKey(),
 					Endpoint:                    wireguard.AsUDP(netip.MustParseAddrPort(endpoints[1])),
-					PersistentKeepaliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepaliveInterval: new(persistentKeepaliveInterval),
 					ReplaceAllowedIPs:           true,
 					AllowedIPs: []net.IPNet{
 						*netipx.PrefixIPNet(netip.PrefixFrom(addresses1[1], addresses1[1].BitLen())),
@@ -211,20 +210,20 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Remove:                      true,
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -259,13 +258,13 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{
@@ -291,13 +290,13 @@ func TestPrepareDeviceConfig(t *testing.T) {
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[0],
 					Address:                     addresses1[0],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 				{
 					PubKey:                      keys[0].PublicKey(),
 					Endpoint:                    endpoints[1],
 					Address:                     addresses1[1],
-					PersistentKeepAliveInterval: pointer.To(persistentKeepaliveInterval),
+					PersistentKeepAliveInterval: new(persistentKeepaliveInterval),
 				},
 			},
 			oldCfg: &wgtypes.Device{

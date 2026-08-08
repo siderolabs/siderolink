@@ -47,7 +47,8 @@ func Run(ctx context.Context, cfg Config, peerHandler wireguard.PeerHandler, log
 		}
 	}()
 
-	logger.Info("starting agent",
+	logger.Info(
+		"starting agent",
 		zap.String("wireguard_endpoint", cfg.WireguardEndpoint),
 		zap.String("api_endpoint", cfg.APIEndpoint),
 		zap.String("sink_endpoint", cfg.SinkEndpoint),
