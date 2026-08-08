@@ -29,7 +29,7 @@ func NewService(pt *wgbind.PeerTraffic, allowed *AllowedPeers, logger *zap.Logge
 		pt:      pt,
 		allowed: allowed,
 		logger:  logger,
-		m:       map[string]context.CancelCauseFunc{},
+		m:       map[string]*streamHandle{},
 	}
 }
 
@@ -44,9 +44,16 @@ type Service struct {
 
 	logger *zap.Logger
 	mx     sync.Mutex
-	m      map[string]context.CancelCauseFunc
+	m      map[string]*streamHandle
 
 	wg sync.WaitGroup
+}
+
+// streamHandle identifies a single CreateStream call for a peer address. It is stored by pointer so a
+// stream can tell whether it still owns the peer's map entry: a replacement installs its own handle,
+// and the departing stream must not tear down the peer state the replacement now owns.
+type streamHandle struct {
+	cancel context.CancelCauseFunc
 }
 
 // CreateStream implements [pb.WireGuardOverGRPCServiceServer].
@@ -74,14 +81,15 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 
 	s.mx.Lock()
 	// If there is existing peer with the same address, cancel it so the other goroutine can exit.
-	if cancel, ok := s.m[peerAddr]; ok {
-		cancel(errPeerReplaced)
+	if existing, ok := s.m[peerAddr]; ok {
+		existing.cancel(errPeerReplaced)
 	}
 
 	ctx, cancel := context.WithCancelCause(srv.Context())
 	defer cancel(nil)
 
-	s.m[peerAddr] = cancel
+	handle := &streamHandle{cancel: cancel}
+	s.m[peerAddr] = handle
 
 	queue, _ := s.pt.GetSendQueue(peerAddr, true)
 
@@ -89,7 +97,11 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 
 	defer func() {
 		s.mx.Lock()
-		if !errors.Is(context.Cause(ctx), errPeerReplaced) {
+		// Only tear down the peer state if this stream still owns it. A replacement stream may have
+		// taken over the entry and the shared send queue, and it does so even when this stream's
+		// context was already canceled by its own transport (so the replaced-cause is not observable
+		// here). Ownership by identity is the reliable signal.
+		if s.m[peerAddr] == handle {
 			delete(s.m, peerAddr)
 
 			s.pt.RemoveQueue(peerAddr)
