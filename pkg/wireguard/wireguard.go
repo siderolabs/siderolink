@@ -97,6 +97,10 @@ type DeviceConfig struct {
 }
 
 // PeerHandler is an interface for handling peer events.
+//
+// A handler that returns an error causes its peer event to be skipped and never replayed, since peer
+// events are delivered once with no resync. The affected peer is then left unconfigured until a later
+// event for it arrives. Handlers must therefore be effectively infallible or do their own retry.
 type PeerHandler interface {
 	HandlePeerAdded(event PeerEvent) error
 	HandlePeerRemoved(pubKey wgtypes.Key) error
@@ -267,13 +271,15 @@ func (dev *Device) Run(ctx context.Context, logger *zap.Logger, peers PeerSource
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-errs:
-			return nil
+		case acceptErr := <-errs:
+			return fmt.Errorf("wireguard uapi listener failed: %w", acceptErr)
 		case <-tunDeviceWait:
-			return nil
+			return errors.New("wireguard tun device closed unexpectedly")
 		case <-timeAfter(dev.dc.AutoPeerRemoveInterval):
-			if err = dev.cleanupPeers(logger); err != nil {
-				return err
+			if cleanupErr := dev.cleanupPeers(logger); cleanupErr != nil {
+				// cleanup is recomputed from live device state on the next tick, so a failure here
+				// must not bring the whole device down.
+				logger.Error("periodic peer cleanup failed", zap.Error(cleanupErr))
 			}
 		case events := <-eventsCh:
 			if err = handlePeerEvent(events); err != nil {
@@ -341,18 +347,24 @@ func (dev *Device) handlePeerEvent(peerEvents []PeerEvent, logger *zap.Logger) e
 		return err
 	}
 
-	cfgs, err := PrepareDeviceConfig(peerEvents, oldCfg, dev.dc.PeerHandler, logger)
+	cfgs, prepareErr := PrepareDeviceConfig(peerEvents, oldCfg, dev.dc.PeerHandler, logger)
+	if prepareErr != nil {
+		// Peers that could not be prepared (a failing peer handler or a malformed endpoint) are
+		// already skipped from cfgs. Apply the rest rather than tearing down every peer over one bad
+		// event. This is logged at error level because a skipped event is never replayed, so the
+		// affected peer stays unconfigured until some later event for it arrives.
+		logger.Error("some peer events were skipped and will not be retried", zap.Error(prepareErr))
+	}
 
 	if len(cfgs) == 0 {
-		return err
+		return nil
 	}
 
-	// err may be non-nil if there was an error but cfgs are still valid if not empty
-	if confErr := dev.client.ConfigureDevice(dev.ifaceName, wgtypes.Config{Peers: cfgs}); confErr != nil {
-		err = multierr.Append(err, fmt.Errorf("error configuring Wireguard peers: %w", confErr))
+	if err = dev.client.ConfigureDevice(dev.ifaceName, wgtypes.Config{Peers: cfgs}); err != nil {
+		return fmt.Errorf("error configuring Wireguard peers: %w", err)
 	}
 
-	return err
+	return nil
 }
 
 func (dev *Device) cleanupPeers(logger *zap.Logger) error {
@@ -412,12 +424,8 @@ func (dev *Device) getPeersToRemove() ([]wgtypes.PeerConfig, error) {
 // Close the device.
 func (dev *Device) Close() (err error) {
 	defer func() {
-		closeErr := dev.client.Close()
-
-		if err == nil {
-			err = closeErr
-		} else {
-			err = fmt.Errorf("%w; client close err: %w", err, closeErr)
+		if closeErr := dev.client.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("client close err: %w", closeErr))
 		}
 	}()
 
@@ -427,7 +435,7 @@ func (dev *Device) Close() (err error) {
 		err = deleteWireguardDevice(dev.ifaceName)
 	}
 
-	return nil
+	return err
 }
 
 // AsUDP converts netip.AddrPort to net.UDPAddr.
