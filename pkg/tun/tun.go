@@ -87,7 +87,7 @@ func (d *Device) Write(bufs [][]byte, offset int) (int, error) {
 }
 
 func (*Device) decodePacketHeader(data []byte) (PacketHeader, error) {
-	if len(data) < 54 {
+	if len(data) < 40 {
 		return PacketHeader{}, fmt.Errorf("packet too short to be a valid IPv6 header")
 	}
 
