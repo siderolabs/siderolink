@@ -73,7 +73,7 @@ func sideroLink(ctx context.Context, eg *errgroup.Group, cfg sideroLinkConfig, p
 	// After this number the queue "from peers" will block
 	const maxPendingClientMessages = 100
 
-	pt := wgbind.NewPeerTraffic(maxPendingClientMessages)
+	pt := wgbind.NewPeerTraffic(maxPendingClientMessages, logger)
 	allowedPeers := wggrpc.NewAllowedPeers()
 
 	p := &peerProvider{
@@ -146,6 +146,10 @@ type peerProvider struct {
 func (p *peerProvider) HandlePeerAdded(event wireguard.PeerEvent) error {
 	if event.VirtualAddr.IsValid() {
 		p.allowedPeers.AddToken(event.PubKey, event.VirtualAddr.String())
+	} else {
+		// The peer re-provisioned without WireGuard over gRPC, so the token it might have had from
+		// before is no longer meant to admit anyone.
+		p.allowedPeers.RemoveToken(event.PubKey)
 	}
 
 	if p.wrapped == nil {

@@ -59,8 +59,15 @@ func (c *ClientBind) Open(uint16) ([]conn.ReceiveFunc, uint16, error) {
 				return 0, net.ErrClosed
 			}
 
+			addr, err := netip.ParseAddrPort(p.Addr)
+			if err != nil {
+				c.l.Warn("client bind dropping server message with malformed source", zap.String("src", p.Addr), zap.Error(err))
+
+				return 0, nil
+			}
+
 			sizes[0] = copy(packets[0], p.Data)
-			eps[0] = &customEndpoint{addr: p.Addr}
+			eps[0] = &customEndpoint{addr: addr}
 
 			c.l.Debug("client bind got server message", zap.String("src", p.Addr), zap.Int("len", sizes[0]))
 
@@ -95,7 +102,12 @@ func (c *ClientBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 func (c *ClientBind) ParseEndpoint(endpoint string) (conn.Endpoint, error) {
 	defer c.l.Debug("client parsed enpoint", zap.String("endpoint", endpoint))
 
-	return &customEndpoint{addr: endpoint}, nil
+	addr, err := netip.ParseAddrPort(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	return &customEndpoint{addr: addr}, nil
 }
 
 // BatchSize implements [conn.Bind].
@@ -122,8 +134,10 @@ func (c *ClientBind) Close() error {
 	return nil
 }
 
+// customEndpoint is a [conn.Endpoint] which is only ever a destination address: the packets do not
+// travel over a socket of ours, so there is no source to speak of.
 type customEndpoint struct {
-	addr string
+	addr netip.AddrPort
 }
 
 func (c *customEndpoint) ClearSrc() {}
@@ -133,17 +147,17 @@ func (c *customEndpoint) SrcToString() string {
 }
 
 func (c *customEndpoint) DstToString() string {
-	return c.addr
+	return c.addr.String()
 }
 
 func (c *customEndpoint) DstToBytes() []byte {
-	return []byte(c.addr)
+	b, _ := c.addr.MarshalBinary() //nolint:errcheck // never fails
+
+	return b
 }
 
 func (c *customEndpoint) DstIP() netip.Addr {
-	ap := netip.MustParseAddrPort(c.addr)
-
-	return ap.Addr()
+	return c.addr.Addr()
 }
 
 func (c *customEndpoint) SrcIP() netip.Addr {

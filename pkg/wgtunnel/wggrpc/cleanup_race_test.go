@@ -45,9 +45,10 @@ func (f *fakeStream) RecvMsg(any) error             { return nil }
 // the old stream cleans up) and asserts the peer's send queue survives.
 func TestCleanupDoesNotDropReplacementQueue(t *testing.T) {
 	peerAddr := "[fdae:41e4:649b:9304::1]:50889"
-	token := netip.MustParseAddrPort(peerAddr).Addr().String()
+	peerAddrPort := netip.MustParseAddrPort(peerAddr)
+	token := peerAddrPort.Addr().String()
 
-	pt := wgbind.NewPeerTraffic(1)
+	pt := wgbind.NewPeerTraffic(1, zap.NewNop())
 	ap := wggrpc.NewAllowedPeers()
 	ap.AddToken(wgtypes.Key{1}, token)
 
@@ -86,7 +87,7 @@ func TestCleanupDoesNotDropReplacementQueue(t *testing.T) {
 
 	// Wait until A has installed the peer and its shared send queue.
 	require.Eventually(t, func() bool {
-		_, ok := pt.GetSendQueue(peerAddr, false)
+		_, ok := pt.GetSendQueue(peerAddrPort)
 
 		return ok
 	}, time.Second*2, time.Millisecond, "stream A never installed its queue")
@@ -94,7 +95,7 @@ func TestCleanupDoesNotDropReplacementQueue(t *testing.T) {
 	// Push a packet so A's send loop leaves the Pop and enters Send, then wait until it is actually
 	// parked there. Only then is it deterministic that A is past its context check and will not run
 	// cleanup until released, so cancelA below cannot make A clean up before B installs.
-	q, ok := pt.GetSendQueue(peerAddr, false)
+	q, ok := pt.GetSendQueue(peerAddrPort)
 	require.True(t, ok)
 	require.NoError(t, q.Push(t.Context(), []byte("park A in Send")))
 
@@ -112,7 +113,7 @@ func TestCleanupDoesNotDropReplacementQueue(t *testing.T) {
 	ctxB, cancelB := context.WithCancel(metadata.NewIncomingContext(t.Context(), md))
 	defer cancelB()
 
-	bStarted := make(chan struct{})
+	bStarted := make(chan struct{}, 1)
 	bDone := make(chan error, 1)
 
 	streamB := &fakeStream{
@@ -153,7 +154,7 @@ func TestCleanupDoesNotDropReplacementQueue(t *testing.T) {
 		t.Fatal("stream A never returned")
 	}
 
-	_, ok = pt.GetSendQueue(peerAddr, false)
+	_, ok = pt.GetSendQueue(peerAddrPort)
 	assert.True(t, ok, "the replacement stream's send queue must survive the old stream's cleanup")
 
 	cancelB()

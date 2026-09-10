@@ -29,7 +29,7 @@ func NewService(pt *wgbind.PeerTraffic, allowed *AllowedPeers, logger *zap.Logge
 		pt:      pt,
 		allowed: allowed,
 		logger:  logger,
-		m:       map[string]*streamHandle{},
+		m:       map[wgtypes.Key]*streamHandle{},
 	}
 }
 
@@ -44,14 +44,14 @@ type Service struct {
 
 	logger *zap.Logger
 	mx     sync.Mutex
-	m      map[string]*streamHandle
+	m      map[wgtypes.Key]*streamHandle
 
 	wg sync.WaitGroup
 }
 
-// streamHandle identifies a single CreateStream call for a peer address. It is stored by pointer so a
-// stream can tell whether it still owns the peer's map entry: a replacement installs its own handle,
-// and the departing stream must not tear down the peer state the replacement now owns.
+// streamHandle identifies a single CreateStream call for a peer. It is stored by pointer so a stream
+// can tell whether it still owns the peer's map entry: a replacement installs its own handle, and the
+// departing stream must not tear down the peer state the replacement now owns.
 type streamHandle struct {
 	cancel context.CancelCauseFunc
 }
@@ -73,15 +73,25 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 		return fmt.Errorf("incorrect header value %q: %w", peerAddr, err)
 	}
 
-	if !s.allowed.CheckToken(addrPort.Addr().String()) {
+	s.mx.Lock()
+
+	// The address the peer presents is only a credential: it is reassigned on every re-provisioning,
+	// so the public key behind it is what identifies the peer from here on. It is resolved under the
+	// same lock that installs the stream, so a token revoked or handed to another peer in between
+	// cannot admit a stream under an identity it no longer has.
+	pubKey, ok := s.allowed.PubKeyForToken(addrPort.Addr().String())
+	if !ok {
+		s.mx.Unlock()
+
 		s.logger.Warn("peer address is not allowed", zap.String("peerAddr", peerAddr))
 
 		return errPeerNotAllowed
 	}
 
-	s.mx.Lock()
-	// If there is existing peer with the same address, cancel it so the other goroutine can exit.
-	if existing, ok := s.m[peerAddr]; ok {
+	// If there is an existing stream for the same peer, cancel it so the other goroutine can exit. The
+	// peer is keyed by public key and not by address, so a peer that comes back on a new address still
+	// displaces its own stale stream instead of running alongside it.
+	if existing, ok := s.m[pubKey]; ok {
 		existing.cancel(errPeerReplaced)
 	}
 
@@ -89,9 +99,17 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 	defer cancel(nil)
 
 	handle := &streamHandle{cancel: cancel}
-	s.m[peerAddr] = handle
+	s.m[pubKey] = handle
 
-	queue, _ := s.pt.GetSendQueue(peerAddr, true)
+	sendQueue, displaced, hasDisplaced := s.pt.OpenSession(pubKey, addrPort)
+	if hasDisplaced {
+		// The address was handed over to this peer from another one, and that peer's session is gone
+		// now. Its stream must go too, or it would keep running detached from any session.
+		if existing, ok := s.m[displaced]; ok {
+			existing.cancel(errPeerReplaced)
+			delete(s.m, displaced)
+		}
+	}
 
 	s.mx.Unlock()
 
@@ -101,17 +119,17 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 		// taken over the entry and the shared send queue, and it does so even when this stream's
 		// context was already canceled by its own transport (so the replaced-cause is not observable
 		// here). Ownership by identity is the reliable signal.
-		if s.m[peerAddr] == handle {
-			delete(s.m, peerAddr)
+		if s.m[pubKey] == handle {
+			delete(s.m, pubKey)
 
-			s.pt.RemoveQueue(peerAddr)
+			s.pt.CloseSession(pubKey)
 		}
 		s.mx.Unlock()
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	l := s.logger.With(zap.String("peer", peerAddr))
+	l := s.logger.With(zap.String("peer", peerAddr), zap.Stringer("public_key", pubKey))
 
 	eg.Go(panicsafe.RunErrF(func() error {
 		s.wg.Add(1)
@@ -127,7 +145,7 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 
 			l.Debug("service received packet from peer", zap.Int("len", len(packet.Data)))
 
-			err = s.pt.PushRecvData(ctx, wgbind.ReceiveData{Addr: peerAddr, Packet: packet})
+			err = s.pt.PushRecvData(ctx, pubKey, packet)
 			if err != nil {
 				l.Debug("service failed to push packet to queue", zap.Error(err))
 
@@ -147,7 +165,7 @@ func (s *Service) CreateStream(srv pb.WireGuardOverGRPCService_CreateStreamServe
 		default:
 		}
 
-		data, err := queue.Pop(ctx)
+		data, err := sendQueue.Pop(ctx)
 		if err != nil {
 			l.Debug("service failed to pop outgoing packet from queue", zap.Error(err))
 
@@ -203,36 +221,57 @@ func handleReturn(ctx context.Context, err error) error {
 func NewAllowedPeers() *AllowedPeers {
 	return &AllowedPeers{
 		allowed:       map[wgtypes.Key]string{},
-		allowedTokens: map[string]struct{}{},
+		allowedTokens: map[string]wgtypes.Key{},
 	}
 }
 
 // AllowedPeers is a list of allowed peers. Currently, [PeerAddrKey] netip.Addr value is used as a token.
 //
+// The mapping is kept 1:1 in both directions: a peer has exactly one token, and a token belongs to
+// exactly one peer.
+//
 //nolint:govet
 type AllowedPeers struct {
 	mx            sync.RWMutex
 	allowed       map[wgtypes.Key]string
-	allowedTokens map[string]struct{}
+	allowedTokens map[string]wgtypes.Key
 }
 
 // CheckToken checks if the token is allowed.
 func (p *AllowedPeers) CheckToken(token string) bool {
-	p.mx.RLock()
-	defer p.mx.RUnlock()
-
-	_, ok := p.allowedTokens[token]
+	_, ok := p.PubKeyForToken(token)
 
 	return ok
 }
 
-// AddToken adds the peer to the allowed list.
+// PubKeyForToken returns the public key of the peer the token belongs to.
+func (p *AllowedPeers) PubKeyForToken(token string) (wgtypes.Key, bool) {
+	p.mx.RLock()
+	defer p.mx.RUnlock()
+
+	pubKey, ok := p.allowedTokens[token]
+
+	return pubKey, ok
+}
+
+// AddToken adds the peer to the allowed list, replacing the token it had before.
 func (p *AllowedPeers) AddToken(pubKey wgtypes.Key, token string) {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 
+	// A re-provisioned peer is handed a new token, and the one it used before must stop being
+	// accepted: otherwise the peer's stale connection stays authorized and keeps competing with the
+	// current one.
+	if oldToken, ok := p.allowed[pubKey]; ok && oldToken != token {
+		delete(p.allowedTokens, oldToken)
+	}
+
+	if oldPubKey, ok := p.allowedTokens[token]; ok && oldPubKey != pubKey {
+		delete(p.allowed, oldPubKey)
+	}
+
 	p.allowed[pubKey] = token
-	p.allowedTokens[token] = struct{}{}
+	p.allowedTokens[token] = pubKey
 }
 
 // RemoveToken removes the peer from the allowed list.
@@ -240,13 +279,13 @@ func (p *AllowedPeers) RemoveToken(pubKey wgtypes.Key) {
 	p.mx.Lock()
 	defer p.mx.Unlock()
 
-	key, ok := p.allowed[pubKey]
+	token, ok := p.allowed[pubKey]
 	if !ok {
 		return
 	}
 
 	delete(p.allowed, pubKey)
-	delete(p.allowedTokens, key)
+	delete(p.allowedTokens, token)
 }
 
 var (

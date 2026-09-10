@@ -71,6 +71,9 @@ func (b *ServerBind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 		}
 
 		sizes[0] = copy(packets[0], data.Packet.Data)
+		// [PeerTraffic.PopRecvData] resolves the address on the way out, so this is always the address
+		// the peer is reachable at now, and adopting it as the peer's endpoint keeps the send path
+		// pointing at the peer's current tunnel session.
 		eps[0] = &customEndpoint{addr: data.Addr}
 
 		return 1, nil
@@ -107,7 +110,7 @@ func (b *ServerBind) SetMark(mark uint32) error {
 // Send implements [conn.Bind]. It will send the packets over grpc if the destination is in the grpcPrefix.
 // Otherwise, it will send the packets over the default conn.Bind.
 func (b *ServerBind) Send(bufs [][]byte, ep conn.Endpoint) error {
-	if !b.grpcPrefix.Contains(netip.MustParseAddrPort(ep.DstToString()).Addr()) {
+	if !b.grpcPrefix.Contains(ep.DstIP()) {
 		for _, buf := range bufs {
 			debugLog(b.l, "sending packet to non-grpc peer", "packet len", len(buf))
 		}
@@ -115,7 +118,14 @@ func (b *ServerBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 		return b.defaultConn.Send(bufs, ep)
 	}
 
-	queue, ok := b.grpcPeers.GetSendQueue(ep.DstToString(), false)
+	addr, ok := endpointAddrPort(ep)
+	if !ok {
+		b.l.Error("failed to parse endpoint", zap.String("endpoint", ep.DstToString()))
+
+		return nil
+	}
+
+	queue, ok := b.grpcPeers.GetSendQueue(addr)
 	if !ok {
 		// No queue for this peer, so we can't send the packet. Just ignore it.
 		return nil
@@ -132,6 +142,21 @@ func (b *ServerBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	}
 
 	return nil
+}
+
+// endpointAddrPort returns the destination of the endpoint without formatting and re-parsing it for the
+// endpoint types that already carry one.
+func endpointAddrPort(ep conn.Endpoint) (netip.AddrPort, bool) {
+	switch ep := ep.(type) {
+	case *customEndpoint:
+		return ep.addr, true
+	case *conn.StdNetEndpoint:
+		return ep.AddrPort, true
+	default:
+		addr, err := netip.ParseAddrPort(ep.DstToString())
+
+		return addr, err == nil
+	}
 }
 
 // ParseEndpoint implements [conn.Bind].

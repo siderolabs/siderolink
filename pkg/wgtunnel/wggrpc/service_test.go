@@ -42,10 +42,10 @@ func TestService(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	pt := wgbind.NewPeerTraffic(1)
-	ap := wggrpc.NewAllowedPeers()
-
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel))
+
+	pt := wgbind.NewPeerTraffic(1, logger)
+	ap := wggrpc.NewAllowedPeers()
 
 	serviceStop := startService(t, pt, ap, eg, logger)
 	defer serviceStop()
@@ -120,12 +120,12 @@ func testServer(ctx context.Context, t *testing.T, pt *wgbind.PeerTraffic, l *za
 			return
 		}
 
-		l.Debug("service got packet", zap.String("src", data.Addr), zap.ByteString("data", data.Packet.Data))
+		l.Debug("service got packet", zap.Stringer("src", data.Addr), zap.ByteString("data", data.Packet.Data))
 
 		strData := string(data.Packet.Data)
 
-		pushToQueue := func(ctx context.Context, addr string, data []byte) error {
-			q, ok := pt.GetSendQueue(addr, false)
+		pushToQueue := func(ctx context.Context, addr netip.AddrPort, data []byte) error {
+			q, ok := pt.GetSendQueue(addr)
 			require.True(t, ok)
 
 			return q.Push(ctx, data)
@@ -230,10 +230,10 @@ func TestReplacingConnectionService(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	pt := wgbind.NewPeerTraffic(1)
-	ap := wggrpc.NewAllowedPeers()
-
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel))
+
+	pt := wgbind.NewPeerTraffic(1, logger)
+	ap := wggrpc.NewAllowedPeers()
 
 	serviceStop := startService(t, pt, ap, eg, logger)
 	defer serviceStop()
@@ -360,10 +360,10 @@ func TestNotAllowedPeer(t *testing.T) {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	pt := wgbind.NewPeerTraffic(1)
-	ap := wggrpc.NewAllowedPeers()
-
 	logger := zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel))
+
+	pt := wgbind.NewPeerTraffic(1, logger)
+	ap := wggrpc.NewAllowedPeers()
 
 	serviceStop := startService(t, pt, ap, eg, logger)
 	defer serviceStop()
