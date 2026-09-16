@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/google/uuid v1.6.0
 	github.com/jsimonetti/rtnetlink/v2 v2.2.0
-	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10
+	github.com/planetscale/vtprotobuf v0.6.1-0.20260702190614-8ae5a48058df
 	github.com/siderolabs/gen v0.8.8
 	github.com/siderolabs/go-pointer v1.0.1
 	github.com/stretchr/testify v1.12.1
